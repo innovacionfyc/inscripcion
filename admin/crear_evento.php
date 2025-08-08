@@ -3,31 +3,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 require_once dirname(__DIR__) . '/db/conexion.php';
-require_once dirname(__DIR__) . '/config/url.php'; // si lo estás usando
-
-// debug opcional, luego bórralo
- echo dirname(__DIR__) . '/db/conexion.php'; exit;
-// --- CONFIGURACIÓN DE URL BASE ---
-define('APP_BASE', '/public'); // porque tu URL es https://inscripcion.fycconsultores.com/public/
-
-function base_url(string $path = ''): string {
-    // Detecta HTTPS incluso detrás de proxy/reverse proxy
-    $https = 'http';
-    if (
-        (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443)
-        || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
-    ) {
-        $https = 'https';
-    }
-
-    $host = $_SERVER['HTTP_HOST'] ?? 'inscripcion.fycconsultores.com';
-    $base = rtrim(APP_BASE, '/');
-    $uri  = ltrim($path, '/');
-
-    return $https . '://' . $host . ($base ? '/' . $base : '') . '/' . $uri;
-}
-// --- FIN CONFIGURACIÓN URL BASE ---
+require_once dirname(__DIR__) . '/config/url.php'; // aquí viene base_url() y APP_BASE=/public
 
 function generarSlug($texto) {
     $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $texto)));
@@ -44,8 +20,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] === 0) {
         $ext = pathinfo($_FILES['imagen']['name'], PATHINFO_EXTENSION);
         $nombreImagen = uniqid('evento_') . '.' . $ext;
-        @mkdir(__DIR__ . '/../uploads/eventos/', 0775, true);
-        move_uploaded_file($_FILES['imagen']['tmp_name'], __DIR__ . '/../uploads/eventos/' . $nombreImagen);
+        @mkdir(dirname(__DIR__) . '/uploads/eventos/', 0775, true);
+        move_uploaded_file($_FILES['imagen']['tmp_name'], dirname(__DIR__) . '/uploads/eventos/' . $nombreImagen);
     }
 
     $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, fecha_limite) VALUES (?, ?, ?, ?, ?)");
@@ -55,9 +31,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $evento_id = $stmt->insert_id;
         $stmt->close();
 
-        $fechas        = isset($_POST["fechas"]) ? $_POST["fechas"] : [];
-        $horas_inicio  = isset($_POST["hora_inicio"]) ? $_POST["hora_inicio"] : [];
-        $horas_fin     = isset($_POST["hora_fin"]) ? $_POST["hora_fin"] : [];
+        $fechas        = $_POST["fechas"] ?? [];
+        $horas_inicio  = $_POST["hora_inicio"] ?? [];
+        $horas_fin     = $_POST["hora_fin"] ?? [];
 
         if (!empty($fechas)) {
             $stmt_fecha = $conn->prepare("INSERT INTO eventos_fechas (evento_id, fecha, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)");
@@ -73,7 +49,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
 
         $conn->close();
-
         header("Location: " . basename(__FILE__) . "?ok=1&slug=" . urlencode($slug));
         exit;
     } else {
@@ -83,7 +58,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 }
 
-$slugValue = isset($_GET['slug']) ? $_GET['slug'] : '';
+$slugValue = $_GET['slug'] ?? '';
 $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : '';
 ?>
 <!DOCTYPE html>
