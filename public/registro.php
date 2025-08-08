@@ -37,25 +37,68 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param("issssssssss", $evento_id, $tipo_inscripcion, $nombre, $cedula, $cargo, $entidad, $celular, $ciudad, $email_personal, $email_corporativo, $medio);
     
-    if ($stmt->execute()) {
-        // Enviar correo de confirmación
-        $correo = new CorreoDenuncia();
+      // Traer fechas del evento para armar el resumen y el horario
+      $fechas_stmt = $conn->prepare("SELECT fecha, hora_inicio, hora_fin FROM eventos_fechas WHERE evento_id = ? ORDER BY fecha ASC");
+      $fechas_stmt->bind_param("i", $evento['id']);
+      $fechas_stmt->execute();
+      $res = $fechas_stmt->get_result();
 
-        // Determinar si es presencial para incluir PDF
-        $es_presencial = strtolower($evento['modalidad']) === 'presencial';
-        $path_pdf = $es_presencial ? __DIR__ . '/../docs/GUIA HOTELERA 2025 - Cafam.pdf' : null;
+      $fechas = [];
+      while ($row = $res->fetch_assoc()) { $fechas[] = $row; }
+      $fechas_stmt->close();
 
-        $correo->sendConfirmacionInscripcion(
-            $nombre,
-            $email_corporativo,
-            $evento['nombre'],
-            $evento['imagen'],
-            $evento['modalidad'],
-            $evento['fecha_limite'],
-            $path_pdf
-        );
+      // Resumen tipo: 4, 5 y 6 de septiembre de 2025
+      function resumirFechas($fechasArr) {
+          if (empty($fechasArr)) return '';
+          $meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+          $dias = array_map(function($f){ return (int)date('j', strtotime($f['fecha'])); }, $fechasArr);
+          $mes  = $meses[(int)date('n', strtotime($fechasArr[0]['fecha'])) - 1];
+          $anio = date('Y', strtotime($fechasArr[0]['fecha']));
+          if (count($dias) == 1) return "{$dias[0]} de $mes de $anio";
+          $ultimo = array_pop($dias);
+          return implode(', ', $dias) . " y $ultimo de $mes de $anio";
+      }
 
-        $mensaje_exito = true;
+      // Detalle horario HTML
+      function detalleHorarioHtml($fechasArr) {
+          if (empty($fechasArr)) return '';
+          $meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+          $html = "<ul style='margin:0;padding-left:18px'>";
+          foreach ($fechasArr as $idx => $f) {
+              $d = (int)date('j', strtotime($f['fecha']));
+              $m = $meses[(int)date('n', strtotime($f['fecha'])) - 1];
+              $y = date('Y', strtotime($f['fecha']));
+              $hi = substr($f['hora_inicio'], 0, 5);
+              $hf = substr($f['hora_fin'], 0, 5);
+              $html .= "<li>Día " . ($idx+1) . ": $d de $m de $y — $hi a $hf</li>";
+          }
+          $html .= "</ul>";
+          return $html;
+      }
+
+      $resumen_fechas  = resumirFechas($fechas);
+      $detalle_horario = detalleHorarioHtml($fechas);
+
+      // Construir datos para el correo
+      $es_presencial = strtolower($evento['modalidad']) === 'presencial';
+      $path_pdf = $es_presencial ? (__DIR__ . '/../docs/GUIA HOTELERA 2025 - Cafam.pdf') : null;
+
+      $datosCorreo = [
+          'nombre_evento'  => $evento['nombre'],
+          'modalidad'      => $evento['modalidad'],
+          'fecha_limite'   => $evento['fecha_limite'],
+          'resumen_fechas' => $resumen_fechas,
+          'detalle_horario'=> $detalle_horario,
+          'url_imagen'     => __DIR__ . '/../uploads/eventos/' . $evento['imagen'],
+          'adjunto_pdf'    => $path_pdf,
+          'lugar'          => $es_presencial ? "Centro de Convenciones Cafam Floresta<br>Av. Cra. 68 No. 90-88, Bogotá - Salón Sauces" : ""
+      ];
+
+      // Enviar
+      $correo = new CorreoDenuncia();
+      $correo->sendConfirmacionInscripcion($nombre, $email_corporativo, $datosCorreo);
+
+      $mensaje_exito = true;
     }
 
     $stmt->close();
