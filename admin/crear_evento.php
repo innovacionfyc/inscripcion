@@ -2,8 +2,8 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-require_once __DIR__ . '/../db/conexion.php';
-require_once __DIR__ . '/config/url.php';
+require_once __DIR__ . '../db/conexion.php';
+require_once __DIR__ . '../config/url.php';
 
 // --- CONFIGURACIÓN DE URL BASE ---
 define('APP_BASE', '/public'); // porque tu URL es https://inscripcion.fycconsultores.com/public/
