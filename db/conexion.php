@@ -1,7 +1,7 @@
 <?php
 $host = "localhost";
-$user = "root";
-$pass = "";
+/* $user = "root";
+$pass = ""; */
 $usuario = "ErickCer1818";          
 $contrasena = "ElManCertifica18#";
 $dbname = "inscritos_db";
