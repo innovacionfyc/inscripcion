@@ -3,7 +3,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 require_once dirname(__DIR__) . '/db/conexion.php';
-require_once dirname(__DIR__) . '/config/url.php'; // aquí viene base_url() y APP_BASE=/public
+require_once dirname(__DIR__) . '/config/url.php'; // base_url() y APP_BASE
 
 function generarSlug($texto) {
     $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $texto)));
@@ -11,18 +11,23 @@ function generarSlug($texto) {
 }
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $nombre       = $_POST["nombre"];
+    $nombre       = isset($_POST["nombre"]) ? $_POST["nombre"] : '';
     $slug         = generarSlug($nombre);
-    $modalidad    = $_POST["modalidad"];
-    $fecha_limite = $_POST["fecha_limite"];
+    $modalidad    = isset($_POST["modalidad"]) ? $_POST["modalidad"] : '';
+    $fecha_limite = isset($_POST["fecha_limite"]) ? $_POST["fecha_limite"] : '';
 
+    // --- Upload imagen ---
     $nombreImagen = '';
-    if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] === 0) {
+    if (isset($_FILES['imagen']) && isset($_FILES['imagen']['error']) && $_FILES['imagen']['error'] === 0) {
+        $uploadsDir = dirname(__DIR__) . '/uploads/eventos/';
+        if (!is_dir($uploadsDir)) {
+            @mkdir($uploadsDir, 0775, true);
+        }
         $ext = pathinfo($_FILES['imagen']['name'], PATHINFO_EXTENSION);
         $nombreImagen = uniqid('evento_') . '.' . $ext;
-        @mkdir(dirname(__DIR__) . '/uploads/eventos/', 0775, true);
-        move_uploaded_file($_FILES['imagen']['tmp_name'], dirname(__DIR__) . '/uploads/eventos/' . $nombreImagen);
+        @move_uploaded_file($_FILES['imagen']['tmp_name'], $uploadsDir . $nombreImagen);
     }
+    // ----------------------
 
     $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, fecha_limite) VALUES (?, ?, ?, ?, ?)");
     $stmt->bind_param("sssss", $nombre, $slug, $nombreImagen, $modalidad, $fecha_limite);
@@ -31,18 +36,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $evento_id = $stmt->insert_id;
         $stmt->close();
 
-        $fechas        = $_POST["fechas"] ?? [];
-        $horas_inicio  = $_POST["hora_inicio"] ?? [];
-        $horas_fin     = $_POST["hora_fin"] ?? [];
+        // Compatibilidad PHP < 7 (sin operador ??)
+        $fechas       = isset($_POST["fechas"]) ? $_POST["fechas"] : array();
+        $horas_inicio = isset($_POST["hora_inicio"]) ? $_POST["hora_inicio"] : array();
+        $horas_fin    = isset($_POST["hora_fin"]) ? $_POST["hora_fin"] : array();
 
         if (!empty($fechas)) {
             $stmt_fecha = $conn->prepare("INSERT INTO eventos_fechas (evento_id, fecha, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)");
+            // Variables que se actualizarán en el loop (bind por referencia)
+            $fecha = $hora_inicio = $hora_fin = null;
             $stmt_fecha->bind_param("isss", $evento_id, $fecha, $hora_inicio, $hora_fin);
 
             for ($i = 0; $i < count($fechas); $i++) {
                 $fecha       = $fechas[$i];
-                $hora_inicio = $horas_inicio[$i] ?? null;
-                $hora_fin    = $horas_fin[$i] ?? null;
+                $hora_inicio = isset($horas_inicio[$i]) ? $horas_inicio[$i] : null;
+                $hora_fin    = isset($horas_fin[$i]) ? $horas_fin[$i] : null;
                 $stmt_fecha->execute();
             }
             $stmt_fecha->close();
@@ -58,7 +66,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 }
 
-$slugValue = $_GET['slug'] ?? '';
+// Compatibilidad PHP < 7
+$slugValue = isset($_GET['slug']) ? $_GET['slug'] : '';
 $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : '';
 ?>
 <!DOCTYPE html>
@@ -88,7 +97,7 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
               type="text"
               id="urlFormulario"
               class="bg-white text-sm border border-gray-300 rounded-xl px-4 py-2 w-full"
-              value="<?= htmlspecialchars($formURL, ENT_QUOTES, 'UTF-8') ?>"
+              value="<?php echo htmlspecialchars($formURL, ENT_QUOTES, 'UTF-8'); ?>"
               readonly
             >
             <button
@@ -107,7 +116,7 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
 
     <?php if (!empty($error)): ?>
       <div class="bg-red-100 text-red-800 font-medium px-6 py-4 rounded-xl mb-4">
-        <?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?>
+        <?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?>
       </div>
     <?php endif; ?>
 
@@ -120,7 +129,7 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         <select id="num_dias" class="w-full p-3 border border-gray-300 rounded-xl mt-2">
           <option value="">Selecciona...</option>
           <?php for ($i = 1; $i <= 7; $i++): ?>
-            <option value="<?= $i ?>"><?= $i ?> día<?= $i > 1 ? 's' : '' ?></option>
+            <option value="<?php echo $i; ?>"><?php echo $i; ?> día<?php echo ($i > 1 ? 's' : ''); ?></option>
           <?php endfor; ?>
         </select>
       </div>
@@ -151,49 +160,49 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
 
   <script src="../assets/js/jquery.min.js"></script>
   <script>
+    // Generar bloques de días
     $('#num_dias').on('change', function () {
-      const num = parseInt(this.value || 0, 10);
-      const container = $('#dias_container');
+      var num = parseInt(this.value || 0, 10);
+      var container = $('#dias_container');
       container.empty();
 
-      for (let i = 1; i <= num; i++) {
-        container.append(`
-          <div class="p-4 border border-gray-200 rounded-xl">
-            <h3 class="font-bold mb-2 text-[#685f2f]">Día ${i}</h3>
-            <label>Fecha:</label>
-            <input type="date" name="fechas[]" class="block w-full p-2 border border-gray-300 rounded-xl mb-2" required>
-            <label>Horario (inicio y fin):</label>
-            <div class="flex gap-4">
-              <input type="time" name="hora_inicio[]" class="w-1/2 p-2 border border-gray-300 rounded-xl" required>
-              <input type="time" name="hora_fin[]" class="w-1/2 p-2 border border-gray-300 rounded-xl" required>
-            </div>
-          </div>
-        `);
+      for (var i = 1; i <= num; i++) {
+        container.append(
+          '<div class="p-4 border border-gray-200 rounded-xl">' +
+            '<h3 class="font-bold mb-2 text-[#685f2f]">Día ' + i + '</h3>' +
+            '<label>Fecha:</label>' +
+            '<input type="date" name="fechas[]" class="block w-full p-2 border border-gray-300 rounded-xl mb-2" required>' +
+            '<label>Horario (inicio y fin):</label>' +
+            '<div class="flex gap-4">' +
+              '<input type="time" name="hora_inicio[]" class="w-1/2 p-2 border border-gray-300 rounded-xl" required>' +
+              '<input type="time" name="hora_fin[]" class="w-1/2 p-2 border border-gray-300 rounded-xl" required>' +
+            '</div>' +
+          '</div>'
+        );
       }
     });
 
     function copiarURL() {
-      const input = document.getElementById('urlFormulario');
-      const msg   = document.getElementById('mensajeCopiado');
-      const texto = input.value;
+      var input = document.getElementById('urlFormulario');
+      var msg   = document.getElementById('mensajeCopiado');
+      var texto = input.value;
 
       if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(texto).then(() => {
+        navigator.clipboard.writeText(texto).then(function () {
           msg.classList.remove('hidden');
-          setTimeout(() => msg.classList.add('hidden'), 1500);
-        }).catch(() => fallbackCopy());
+          setTimeout(function(){ msg.classList.add('hidden'); }, 1500);
+        }).catch(fallbackCopy);
       } else {
         fallbackCopy();
       }
 
       function fallbackCopy() {
         input.select();
-        input.setSelectionRange(0, 99999);
         try {
           document.execCommand('copy');
           msg.classList.remove('hidden');
-          setTimeout(() => msg.classList.add('hidden'), 1500);
-        } catch (_) {
+          setTimeout(function(){ msg.classList.add('hidden'); }, 1500);
+        } catch (e) {
           msg.textContent = "❌ No se pudo copiar";
           msg.classList.remove('hidden');
         }
