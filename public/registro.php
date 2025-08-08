@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../db/conexion.php';
 require_once __DIR__ . '/../correo/enviar_correo.php';
+require_once __DIR__ . '/config/url.php';
+
 
 $evento = null;
 $slug = isset($_GET['e']) ? $_GET['e'] : '';
