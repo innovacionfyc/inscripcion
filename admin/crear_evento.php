@@ -3,7 +3,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 require_once dirname(__DIR__) . '/db/conexion.php';
-require_once dirname(__DIR__) . '/config/url.php'; // base_url() y APP_BASE
+require_once dirname(__DIR__) . '/config/url.php';
 
 function generarSlug($texto) {
     $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $texto)));

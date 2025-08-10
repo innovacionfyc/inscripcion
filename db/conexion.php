@@ -1,12 +1,4 @@
 <?php
-// Muestra errores solo mientras pruebas en el server.
-// Quita estas 2 líneas cuando todo funcione.
-// error_reporting(E_ALL);
-// ini_set('display_errors', 1);
-
-/**
- * PRODUCCIÓN (Plesk)
- */
 $dbname = 'inscritos_db';
 $host = 'localhost';
 $user = 'ErickCer1818';
