@@ -131,8 +131,8 @@ class CorreoDenuncia {
 
                   <p style='margin:14px 0 8px'><strong>🔹 Tenga en cuenta:</strong></p>
                   <ul style='margin:8px 0 18px; padding-left:18px; color:#333'>
-                    <li>Para garantizar su reserva, por favor envíe con anticipación el soporte de pago o autorización correspondiente.</li>
-                    ".(!empty($fechaLimiteTxt) ? "<li>Confirme su asistencia antes del <strong>{$fechaLimiteTxt}</strong>.</li>" : "")."
+                    <li>Para garantizar su reserva, por favor envíe con anticipación el soporte de pago o autorización correspondiente (transferencia, registro presupuestal, contrato, resolución u orden de servicio).</li>
+                    ".(!empty($fechaLimiteTxt) ? "<li>Confirme su asistencia antes del <strong>{$fechaLimiteTxt}</strong> para la logística del evento.</li>" : "")."
                     <li>Un día antes del evento recibirá el cronograma detallado.</li>
                   </ul>
 

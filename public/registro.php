@@ -78,13 +78,19 @@ function detalleHorarioHtml($fechasArr) {
         $d = (int)date('j', strtotime($f['fecha']));
         $m = $meses[(int)date('n', strtotime($f['fecha'])) - 1];
         $y = date('Y', strtotime($f['fecha']));
-        $hi = substr($f['hora_inicio'], 0, 5);
-        $hf = substr($f['hora_fin'], 0, 5);
+
+        // Formato 12h con am/pm en español
+        $hi = date('g:i a', strtotime($f['hora_inicio']));
+        $hf = date('g:i a', strtotime($f['hora_fin']));
+        $hi = str_replace(array('am','pm'), array('a. m.','p. m.'), $hi);
+        $hf = str_replace(array('am','pm'), array('a. m.','p. m.'), $hf);
+
         $html .= "<li>Día " . ($i+1) . ": $d de $m de $y — $hi a $hf</li>";
     }
     $html .= "</ul>";
     return $html;
 }
+
 
 $mensaje_exito = false;
 
