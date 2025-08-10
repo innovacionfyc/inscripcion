@@ -1,5 +1,4 @@
 <?php
-<?php
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
 require_once __DIR__ . '/../correo/enviar_correo.php';

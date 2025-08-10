@@ -8,8 +8,10 @@
  * PRODUCCIÓN (Plesk)
  */
 $host = 'localhost';              // en Plesk suele ir bien 127.0.0.1
-$user = 'ErickCer1818';           // <-- tu usuario real
-$pass = 'ElManCertifica18#';      // <-- tu contraseña real
+/* $user = 'ErickCer1818';           // <-- tu usuario real */
+$user = 'root';           // <-- tu usuario real
+/* $pass = 'ElManCertifica18#';      // <-- tu contraseña real */
+$pass = '';      // <-- tu contraseña real
 $dbname = 'inscritos_db';         // <-- tu base
 
 $conn = new mysqli($host, $user, $pass, $dbname);
