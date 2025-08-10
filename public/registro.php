@@ -1,7 +1,36 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
 require_once __DIR__ . '/../correo/enviar_correo.php';
+
+// 1) Tomar el slug (?e=...)
+$slug = isset($_GET['e']) ? $_GET['e'] : '';
+if ($slug === '') {
+    http_response_code(400);
+    echo 'Falta el parámetro "e" (slug del evento).';
+    exit;
+}
+
+// 2) Consultar el evento
+$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, fecha_limite FROM eventos WHERE slug = ? LIMIT 1');
+$stmt->bind_param('s', $slug);
+$stmt->execute();
+$res = $stmt->get_result();
+$evento = $res ? $res->fetch_assoc() : null;
+$stmt->close();
+
+if (!$evento) {
+    http_response_code(404);
+    echo 'Evento no encontrado para el slug: ' . htmlspecialchars($slug);
+    exit;
+}
+
+// 3) Rutas útiles
+$imgEventoRel = 'uploads/eventos/' . $evento['imagen']; // para <img src="<?= base_url($imgEventoRel) >
+$imgEventoFs   = dirname(__DIR__) . '/uploads/eventos/' . $evento['imagen']; // para file_exists si quieres verificar
 
 
 
