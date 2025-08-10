@@ -79,18 +79,19 @@ function detalleHorarioHtml($fechasArr) {
         $m = $meses[(int)date('n', strtotime($f['fecha'])) - 1];
         $y = date('Y', strtotime($f['fecha']));
 
-        // Formato 12h con am/pm en español
-        $hi = date('g:i a', strtotime($f['hora_inicio']));
-        $hf = date('g:i a', strtotime($f['hora_fin']));
-        $hi = str_replace(array('am','pm'), array('a. m.','p. m.'), $hi);
-        $hf = str_replace(array('am','pm'), array('a. m.','p. m.'), $hf);
+        // Convierte siempre a timestamp y luego a 12h
+        $hi = date('g:i a', strtotime($f['fecha'] . ' ' . $f['hora_inicio']));
+        $hf = date('g:i a', strtotime($f['fecha'] . ' ' . $f['hora_fin']));
 
-        $html .= "<li>Día " . ($i+1) . ": $d de $m de $y — $hi a $hf</li>";
+        // Reemplaza am/pm por a. m./p. m.
+        $hi = str_replace(array('am','pm'), array('a. m.','p. m.'), strtolower($hi));
+        $hf = str_replace(array('am','pm'), array('a. m.','p. m.'), strtolower($hf));
+
+        $html .= "<li>Día " . ($i+1) . ": $d de $m de $y — <strong>$hi</strong> a <strong>$hf</strong></li>";
     }
     $html .= "</ul>";
     return $html;
 }
-
 
 $mensaje_exito = false;
 
