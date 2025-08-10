@@ -7,12 +7,12 @@
 /**
  * PRODUCCIÓN (Plesk)
  */
-$host = 'localhost';              // en Plesk suele ir bien 127.0.0.1
-/* $user = 'ErickCer1818';           // <-- tu usuario real */
-$user = 'root';           // <-- tu usuario real
-/* $pass = 'ElManCertifica18#';      // <-- tu contraseña real */
-$pass = '';      // <-- tu contraseña real
-$dbname = 'inscritos_db';         // <-- tu base
+$dbname = 'inscritos_db';
+$host = 'localhost';
+$user = 'ErickCer1818';
+$pass = 'ElManCertifica18#';
+/* $user = 'root';
+$pass = ''; */
 
 $conn = new mysqli($host, $user, $pass, $dbname);
 if ($conn->connect_errno) {
