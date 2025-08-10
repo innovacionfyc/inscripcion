@@ -19,16 +19,22 @@ class CorreoDenuncia {
      *  - resumen_fechas (ej. "4, 5 y 6 de septiembre de 2025")
      *  - detalle_horario (HTML)
      *  - url_imagen (ruta ABSOLUTA en el servidor para incrustar)  [opcional]
+     *  - url_imagen_public (URL pública opcional)
      *  - adjunto_pdf (ruta ABSOLUTA del PDF a adjuntar)            [opcional]
      *  - lugar (HTML opcional si es presencial)
+     *  - entidad_empresa (para encabezado “Señores”)
+     *  - nombre_inscrito  (para encabezado “Señores”)
+     *  - whatsapp_numero  (solo dígitos, ej. 573001234567)
+     *  - firma_url_public (URL pública de imagen de firma)
+     *  - encargado_nombre (texto debajo de firma)
      * @return bool true si envía, false si falla
      */
     public function sendConfirmacionInscripcion($nombre, $correo, array $data) {
         $mail = new PHPMailer(true);
 
         try {
-            // ====== SMTP según tu proyecto anterior ======
-            $mail->SMTPDebug  = 0;
+            // ====== SMTP (según tu proyecto) ======
+            $mail->SMTPDebug   = 0;
             $mail->Debugoutput = 'html';
             $mail->isSMTP();
             $mail->Host       = 'smtp-relay.gmail.com';
@@ -59,7 +65,7 @@ class CorreoDenuncia {
             $mail->addAddress($correo, $nombre);
             $mail->addReplyTo($fromEmail, $fromName); // por si responden
 
-            // ====== Adjuntos / Embebidos ======
+            // ====== Embebidos / Adjuntos ======
             // Imagen del evento embebida (si existe)
             $cidImg = null;
             if (!empty($data['url_imagen']) && is_file($data['url_imagen'])) {
@@ -69,7 +75,6 @@ class CorreoDenuncia {
             }
 
             // PDF adjunto (si existe)
-            // PDF adjunto (si existe)
             if (!empty($data['adjunto_pdf'])) {
                 if (!file_exists($data['adjunto_pdf'])) {
                     error_log("PDF no encontrado: " . $data['adjunto_pdf']);
@@ -77,7 +82,6 @@ class CorreoDenuncia {
                     $mail->addAttachment($data['adjunto_pdf'], basename($data['adjunto_pdf']));
                 }
             }
-
 
             // ====== Contenido ======
             $mail->isHTML(true);
@@ -89,7 +93,7 @@ class CorreoDenuncia {
                 : '';
 
             $lugarHtml = !empty($data['lugar'])
-                ? "<p><strong>🔹 Lugar:</strong><br>{$data['lugar']}</p>"
+                ? "<p><strong>•  Lugar:</strong><br>{$data['lugar']}</p>"
                 : '';
 
             $pdfAviso  = (!empty($data['adjunto_pdf']) && is_file($data['adjunto_pdf']))
@@ -97,11 +101,11 @@ class CorreoDenuncia {
                 : '';
 
             // Sanitiza mínimos
-            $modalidadTxt = isset($data['modalidad']) ? htmlspecialchars($data['modalidad'], ENT_QUOTES, 'UTF-8') : '';
-            $nombreEvento = isset($data['nombre_evento']) ? htmlspecialchars($data['nombre_evento'], ENT_QUOTES, 'UTF-8') : '';
-            $resumenFechas= isset($data['resumen_fechas']) ? $data['resumen_fechas'] : '';
-            $detalleHorario = isset($data['detalle_horario']) ? $data['detalle_horario'] : '';
-            $fechaLimite = isset($data['fecha_limite']) ? $data['fecha_limite'] : '';
+            $modalidadTxt    = isset($data['modalidad']) ? htmlspecialchars($data['modalidad'], ENT_QUOTES, 'UTF-8') : '';
+            $nombreEvento    = isset($data['nombre_evento']) ? htmlspecialchars($data['nombre_evento'], ENT_QUOTES, 'UTF-8') : '';
+            $resumenFechas   = isset($data['resumen_fechas']) ? $data['resumen_fechas'] : '';
+            $detalleHorario  = isset($data['detalle_horario']) ? $data['detalle_horario'] : '';
+            $fechaLimite     = isset($data['fecha_limite']) ? $data['fecha_limite'] : '';
 
             $fechaLimiteTxt = '';
             if (!empty($fechaLimite)) {
@@ -110,13 +114,57 @@ class CorreoDenuncia {
                     $fechaLimiteTxt = date('d/m/Y', $ts);
                 }
             }
+
+            // Encabezado “Señores: (Entidad) (Nombre)”
+            $encabezado = '';
+            if (!empty($data['entidad_empresa']) || !empty($data['nombre_inscrito'])) {
+                $encabezado  = "<p style='margin:0 0 10px'><strong>Señores:</strong><br>";
+                if (!empty($data['entidad_empresa'])) {
+                    $encabezado .= htmlspecialchars($data['entidad_empresa'], ENT_QUOTES, 'UTF-8') . "<br>";
+                }
+                if (!empty($data['nombre_inscrito'])) {
+                    $encabezado .= htmlspecialchars($data['nombre_inscrito'], ENT_QUOTES, 'UTF-8');
+                }
+                $encabezado .= "</p>";
+            }
+
+            // Botón de WhatsApp
+            $btnWhatsapp = '';
+            if (!empty($data['whatsapp_numero'])) {
+                $wa = preg_replace('/\D/', '', $data['whatsapp_numero']);
+                $txt = rawurlencode('Hola, tengo una consulta sobre el evento ' . (isset($data['nombre_evento']) ? $data['nombre_evento'] : ''));
+                $btnWhatsapp = '<p style="margin:16px 0 0">
+                    <a href="https://wa.me/'.$wa.'?text='.$txt.'" target="_blank"
+                       style="display:inline-block;background:#25D366;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">
+                      📱 Contactar por WhatsApp
+                    </a>
+                  </p>';
+            }
+
+            // Firma (imagen + nombre)
+            $firmaHtml = '';
+            if (!empty($data['firma_url_public']) || !empty($data['encargado_nombre'])) {
+                $firmaHtml .= '<div style="margin-top:18px">';
+                if (!empty($data['firma_url_public'])) {
+                    $firmaHtml .= '<img src="'.htmlspecialchars($data['firma_url_public'], ENT_QUOTES, 'UTF-8').'" alt="Firma" style="max-height:90px"><br>';
+                }
+                if (!empty($data['encargado_nombre'])) {
+                    $firmaHtml .= '<strong>'.htmlspecialchars($data['encargado_nombre'], ENT_QUOTES, 'UTF-8').'</strong>';
+                }
+                $firmaHtml .= '</div>';
+            }
+
+            // HTML final
             $html = "
             <div style='font-family:Arial, Helvetica, sans-serif;background:#f6f7fb;padding:24px'>
               <div style='max-width:700px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden'>
                 {$bannerImg}
                 <div style='padding:28px; font-size:15px; color:#222'>
-                  <h2 style='margin:0 0 10px;color:#942934;font-size:22px'>¡Inscripción confirmada!</h2>
-                  <p style='margin:0 0 16px'>Hola <strong>".htmlspecialchars($nombre, ENT_QUOTES, 'UTF-8')."</strong>, gracias por inscribirte al:</p>
+
+                  {$encabezado}
+
+                  <p style='margin:0 0 10px'>Gracias por sumarse a este espacio de aprendizaje. Su inscripción ha sido confirmada. A continuación, encontrará los detalles del evento:</p>
+
                   <h3 style='margin:0 0 14px;color:#d32f57;font-size:20px'>{$nombreEvento}</h3>
 
                   <p style='margin:0 0 12px'><strong>Modalidad:</strong> {$modalidadTxt}</p>
@@ -127,14 +175,20 @@ class CorreoDenuncia {
                     {$detalleHorario}
                   </div>
 
-                  ".($lugarHtml ? $lugarHtml : "")."
+                  {$lugarHtml}
 
                   <p style='margin:14px 0 8px'><strong>🔹 Tenga en cuenta:</strong></p>
                   <ul style='margin:8px 0 18px; padding-left:18px; color:#333'>
-                    <li>Para garantizar su reserva, por favor envíe con anticipación el soporte de pago o autorización correspondiente (transferencia, registro presupuestal, contrato, resolución u orden de servicio).</li>
-                    ".(!empty($fechaLimiteTxt) ? "<li>Confirme su asistencia antes del <strong>{$fechaLimiteTxt}</strong> para la logística del evento.</li>" : "")."
+                    <li>Para garantizar su reserva, por favor envíe con anticipación el soporte de pago o autorización correspondiente.</li>"
+                    .(!empty($fechaLimiteTxt) ? "<li>Confirme su asistencia antes del <strong>{$fechaLimiteTxt}</strong>.</li>" : "")."
                     <li>Un día antes del evento recibirá el cronograma detallado.</li>
                   </ul>
+
+                  {$btnWhatsapp}
+
+                  <p style='margin-top:24px'>¡Nos vemos pronto!</p>
+                  <p style='margin:0'>Cordialmente,</p>
+                  {$firmaHtml}
 
                   ".($pdfAviso ? $pdfAviso : "")."
 
