@@ -114,7 +114,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $detalle_horario = detalleHorarioHtml($fechas);
 
         $es_presencial = (strtolower($evento['modalidad']) === 'presencial');
-        $path_pdf = $es_presencial ? (dirname(__DIR__) . '/docs/GUIA HOTELERA 2025 - Cafam.pdf') : null;
+        $path_pdf = $es_presencial ? (dirname(__DIR__) . '/docs/GUIA_HOTELERA_2025_Cafam.pdf') : null;
 
         $datosCorreo = array(
             'nombre_evento'  => $evento['nombre'],

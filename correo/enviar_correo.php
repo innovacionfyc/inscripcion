@@ -69,9 +69,15 @@ class CorreoDenuncia {
             }
 
             // PDF adjunto (si existe)
-            if (!empty($data['adjunto_pdf']) && is_file($data['adjunto_pdf'])) {
-                $mail->addAttachment($data['adjunto_pdf'], basename($data['adjunto_pdf']));
+            // PDF adjunto (si existe)
+            if (!empty($data['adjunto_pdf'])) {
+                if (!file_exists($data['adjunto_pdf'])) {
+                    error_log("PDF no encontrado: " . $data['adjunto_pdf']);
+                } else {
+                    $mail->addAttachment($data['adjunto_pdf'], basename($data['adjunto_pdf']));
+                }
             }
+
 
             // ====== Contenido ======
             $mail->isHTML(true);
@@ -104,37 +110,37 @@ class CorreoDenuncia {
                     $fechaLimiteTxt = date('d/m/Y', $ts);
                 }
             }
-
             $html = "
             <div style='font-family:Arial, Helvetica, sans-serif;background:#f6f7fb;padding:24px'>
-              <div style='max-width:640px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden'>
+              <div style='max-width:700px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden'>
                 {$bannerImg}
-                <div style='padding:24px'>
-                  <h2 style='margin:0 0 8px;color:#942934'>¡Inscripción confirmada!</h2>
-                  <p style='margin:0 0 16px;color:#333'>Hola <strong>".htmlspecialchars($nombre, ENT_QUOTES, 'UTF-8')."</strong>, gracias por inscribirte al:</p>
-                  <h3 style='margin:0 0 12px;color:#d32f57'>{$nombreEvento}</h3>
+                <div style='padding:28px; font-size:15px; color:#222'>
+                  <h2 style='margin:0 0 10px;color:#942934;font-size:22px'>¡Inscripción confirmada!</h2>
+                  <p style='margin:0 0 16px'>Hola <strong>".htmlspecialchars($nombre, ENT_QUOTES, 'UTF-8')."</strong>, gracias por inscribirte al:</p>
+                  <h3 style='margin:0 0 14px;color:#d32f57;font-size:20px'>{$nombreEvento}</h3>
+
                   <p style='margin:0 0 12px'><strong>Modalidad:</strong> {$modalidadTxt}</p>
 
-                  <p style='margin:0 0 6px'><strong>📌 Fecha y Horario:</strong></p>
-                  <p style='margin:0'><span>📅 {$resumenFechas}</span></p>
-                  <div style='margin:8px 0 16px; padding:12px; background:#fafafa; border:1px solid #eee; border-radius:10px;'>
+                  <p style='margin:0 0 6px'><strong>📌 Fecha y Horario</strong></p>
+                  <p style='margin:0 0 8px'>📅 {$resumenFechas}</p>
+                  <div style='margin:8px 0 18px; padding:14px; background:#fafafa; border:1px solid #eee; border-radius:10px;'>
                     {$detalleHorario}
                   </div>
 
-                  {$lugarHtml}
+                  ".($lugarHtml ? $lugarHtml : "")."
 
-                  <p><strong>🔹 Tenga en cuenta:</strong></p>
-                  <ul style='margin:8px 0 16px; padding-left:18px; color:#333'>
+                  <p style='margin:14px 0 8px'><strong>🔹 Tenga en cuenta:</strong></p>
+                  <ul style='margin:8px 0 18px; padding-left:18px; color:#333'>
                     <li>Para garantizar su reserva, por favor envíe con anticipación el soporte de pago o autorización correspondiente.</li>
                     ".(!empty($fechaLimiteTxt) ? "<li>Confirme su asistencia antes del <strong>{$fechaLimiteTxt}</strong>.</li>" : "")."
                     <li>Un día antes del evento recibirá el cronograma detallado.</li>
                   </ul>
 
-                  {$pdfAviso}
+                  ".($pdfAviso ? $pdfAviso : "")."
 
                   <p style='font-size:12px;color:#888;margin-top:24px'>Este es un mensaje automático, por favor no responder.</p>
                 </div>
-                <div style='background:#f1f1f1;text-align:center;padding:10px;font-size:12px;color:#888'>
+                <div style='background:#f1f1f1;text-align:center;padding:12px;font-size:12px;color:#888'>
                   F&C Consultores © ".date('Y')."
                 </div>
               </div>
