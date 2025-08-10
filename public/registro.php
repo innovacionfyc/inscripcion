@@ -4,7 +4,7 @@ ini_set('display_errors', 1);
 
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
-require_once dirname(__DIR__) . '/correo/enviar_correo.php'; // ajusté la ruta a dirname(__DIR__)
+require_once dirname(__DIR__) . '/correo/enviar_correo.php';
 
 // -----------------------------
 // 1) Tomar slug
@@ -21,17 +21,20 @@ if ($slug === '') {
 // -----------------------------
 $evento = null;
 
-$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, fecha_limite FROM eventos WHERE slug = ? LIMIT 1');
+$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre FROM eventos WHERE slug = ? LIMIT 1');
 $stmt->bind_param('s', $slug);
 $stmt->execute();
-$stmt->bind_result($ev_id, $ev_nombre, $ev_imagen, $ev_modalidad, $ev_fecha_limite);
+$stmt->bind_result($ev_id, $ev_nombre, $ev_imagen, $ev_modalidad, $ev_fecha_limite, $ev_wa, $ev_firma, $ev_encargado);
 if ($stmt->fetch()) {
     $evento = array(
-        'id'            => $ev_id,
-        'nombre'        => $ev_nombre,
-        'imagen'        => $ev_imagen,
-        'modalidad'     => $ev_modalidad,
-        'fecha_limite'  => $ev_fecha_limite
+        'id'               => $ev_id,
+        'nombre'           => $ev_nombre,
+        'imagen'           => $ev_imagen,
+        'modalidad'        => $ev_modalidad,
+        'fecha_limite'     => $ev_fecha_limite,
+        'whatsapp_numero'  => $ev_wa,
+        'firma_imagen'     => $ev_firma,
+        'encargado_nombre' => $ev_encargado
     );
 }
 $stmt->close();
@@ -43,7 +46,7 @@ if (!$evento) {
 }
 
 // -----------------------------
-// 3) Preparar utilidades correo (fechas del evento)
+// 3) Fechas/horario del evento
 // -----------------------------
 $fechas = array();
 $stmtf = $conn->prepare("SELECT fecha, hora_inicio, hora_fin FROM eventos_fechas WHERE evento_id = ? ORDER BY fecha ASC");
@@ -79,11 +82,9 @@ function detalleHorarioHtml($fechasArr) {
         $m = $meses[(int)date('n', strtotime($f['fecha'])) - 1];
         $y = date('Y', strtotime($f['fecha']));
 
-        // Convierte siempre a timestamp y luego a 12h
-        $hi = date('g:i a', strtotime($f['fecha'] . ' ' . $f['hora_inicio']));
-        $hf = date('g:i a', strtotime($f['fecha'] . ' ' . $f['hora_fin']));
-
-        // Reemplaza am/pm por a. m./p. m.
+        // Forzar 12h con a. m./p. m. y negrita
+        $hi = date('g:i a', strtotime($f['fecha'].' '.$f['hora_inicio']));
+        $hf = date('g:i a', strtotime($f['fecha'].' '.$f['hora_fin']));
         $hi = str_replace(array('am','pm'), array('a. m.','p. m.'), strtolower($hi));
         $hf = str_replace(array('am','pm'), array('a. m.','p. m.'), strtolower($hf));
 
@@ -93,10 +94,13 @@ function detalleHorarioHtml($fechasArr) {
     return $html;
 }
 
+$resumen_fechas  = !empty($fechas) ? resumirFechas($fechas) : 'Por definir';
+$detalle_horario = !empty($fechas) ? detalleHorarioHtml($fechas) : '<em>Pronto te enviaremos el horario detallado.</em>';
+
 $mensaje_exito = false;
 
 // -----------------------------
-// 4) Manejo POST (INSERT + correo)
+// 4) POST: guardar inscripción + correo
 // -----------------------------
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $evento_id         = isset($_POST["evento_id"]) ? $_POST["evento_id"] : 0;
@@ -116,36 +120,63 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $stmt->bind_param("issssssssss", $evento_id, $tipo_inscripcion, $nombre, $cedula, $cargo, $entidad, $celular, $ciudad, $email_personal, $email_corporativo, $medio);
 
     if ($stmt->execute()) {
-        // Armar datos de correo
-        $resumen_fechas  = resumirFechas($fechas);
-        $detalle_horario = detalleHorarioHtml($fechas);
-
+        // --- Armar datos del correo ---
         $es_presencial = (strtolower($evento['modalidad']) === 'presencial');
+
+        // PDF (ruta en /public/docs/)
         $path_pdf = $es_presencial ? (__DIR__ . '/docs/GUIA_HOTELERA_2025_Cafam.pdf') : null;
+        if ($path_pdf && !file_exists($path_pdf)) {
+            error_log("PDF no encontrado: " . $path_pdf);
+            $path_pdf = null;
+        }
+
+        // Imagen del evento (embebida) + URL pública opcional
+        $img_file  = dirname(__DIR__) . '/uploads/eventos/' . $evento['imagen'];
+        $img_pub   = base_url('uploads/eventos/' . $evento['imagen']);
+
+        // WhatsApp (solo números)
+        $wa_num = '';
+        if (!empty($evento['whatsapp_numero'])) {
+            $wa_num = preg_replace('/\D/', '', $evento['whatsapp_numero']);
+        }
+
+        // Firma (URL pública)
+        $firma_url_public = '';
+        if (!empty($evento['firma_imagen'])) {
+            $firma_url_public = base_url('uploads/firmas/' . $evento['firma_imagen']);
+        }
 
         $datosCorreo = array(
-            'nombre_evento'  => $evento['nombre'],
-            'modalidad'      => $evento['modalidad'],
-            'fecha_limite'   => $evento['fecha_limite'],
-            'resumen_fechas' => $resumen_fechas,
-            'detalle_horario'=> $detalle_horario,
-            'url_imagen'     => dirname(__DIR__) . '/uploads/eventos/' . $evento['imagen'],
-            'adjunto_pdf'    => $path_pdf,
-            'lugar'          => $es_presencial ? "Centro de Convenciones Cafam Floresta<br>Av. Cra. 68 No. 90-88, Bogotá - Salón Sauces" : ""
+            // Evento
+            'nombre_evento'    => $evento['nombre'],
+            'modalidad'        => $evento['modalidad'],
+            'fecha_limite'     => $evento['fecha_limite'],
+            'resumen_fechas'   => $resumen_fechas,
+            'detalle_horario'  => $detalle_horario,
+            'url_imagen'       => $img_file,              // para addEmbeddedImage
+            'url_imagen_public'=> $img_pub,               // por si quieres referenciar URL
+            'adjunto_pdf'      => $path_pdf,
+            'lugar'            => $es_presencial ? "Centro de Convenciones Cafam Floresta<br>Av. Cra. 68 No. 90-88, Bogotá - Salón Sauces" : "",
+
+            // Encabezado “Señores:”
+            'entidad_empresa'  => $entidad,
+            'nombre_inscrito'  => $nombre,
+
+            // WhatsApp y firma
+            'whatsapp_numero'  => $wa_num,                // ejemplo: 573001234567
+            'firma_url_public' => $firma_url_public,
+            'encargado_nombre' => $evento['encargado_nombre']
         );
 
-        // Enviar correo (maneja excepciones dentro si aplica)
         $correo = new CorreoDenuncia();
         $correo->sendConfirmacionInscripcion($nombre, $email_corporativo, $datosCorreo);
 
         $mensaje_exito = true;
     } else {
-        // Si falla el insert, muestra error
         echo '<pre>Error al guardar inscripción: ' . htmlspecialchars($stmt->error, ENT_QUOTES, 'UTF-8') . '</pre>';
     }
 
     $stmt->close();
-    // Nota: NO cierro $conn aquí para poder seguir renderizando la vista sin problemas.
 }
 ?>
 <!DOCTYPE html>
@@ -218,13 +249,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         alert("La cédula debe contener solo números.");
         return false;
       }
-
       if (!/^\d{7,15}$/.test(celular)) {
         alert("El celular debe contener entre 7 y 15 dígitos.");
         return false;
       }
-
-      if (!/\S+@\S+\.\S+/.test(correo)) {
+      if (!/\\S+@\\S+\\.\\S+/.test(correo)) {
         alert("Correo corporativo inválido.");
         return false;
       }
