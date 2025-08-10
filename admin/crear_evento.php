@@ -11,12 +11,14 @@ function generarSlug($texto) {
 }
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $nombre       = isset($_POST["nombre"]) ? $_POST["nombre"] : '';
-    $slug         = generarSlug($nombre);
-    $modalidad    = isset($_POST["modalidad"]) ? $_POST["modalidad"] : '';
-    $fecha_limite = isset($_POST["fecha_limite"]) ? $_POST["fecha_limite"] : '';
+    $nombre           = isset($_POST["nombre"]) ? $_POST["nombre"] : '';
+    $slug             = generarSlug($nombre);
+    $modalidad        = isset($_POST["modalidad"]) ? $_POST["modalidad"] : '';
+    $fecha_limite     = isset($_POST["fecha_limite"]) ? $_POST["fecha_limite"] : '';
+    $whatsapp_numero  = isset($_POST["whatsapp_numero"]) ? trim($_POST["whatsapp_numero"]) : '';
+    $encargado_nombre = isset($_POST["encargado_nombre"]) ? trim($_POST["encargado_nombre"]) : '';
 
-    // --- Upload imagen ---
+    // --- Upload imagen principal del evento ---
     $nombreImagen = '';
     if (isset($_FILES['imagen']) && isset($_FILES['imagen']['error']) && $_FILES['imagen']['error'] === 0) {
         $uploadsDir = dirname(__DIR__) . '/uploads/eventos/';
@@ -27,23 +29,35 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $nombreImagen = uniqid('evento_') . '.' . $ext;
         @move_uploaded_file($_FILES['imagen']['tmp_name'], $uploadsDir . $nombreImagen);
     }
-    // ----------------------
 
-    $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, fecha_limite) VALUES (?, ?, ?, ?, ?)");
-    $stmt->bind_param("sssss", $nombre, $slug, $nombreImagen, $modalidad, $fecha_limite);
+    // --- Upload firma del encargado (opcional) ---
+    $nombreFirma = '';
+    if (isset($_FILES['firma_imagen']) && isset($_FILES['firma_imagen']['error']) && $_FILES['firma_imagen']['error'] === 0) {
+        $firmasDir = dirname(__DIR__) . '/uploads/firmas/';
+        if (!is_dir($firmasDir)) {
+            @mkdir($firmasDir, 0775, true);
+        }
+        $extF = pathinfo($_FILES['firma_imagen']['name'], PATHINFO_EXTENSION);
+        $nombreFirma = uniqid('firma_') . '.' . $extF;
+        @move_uploaded_file($_FILES['firma_imagen']['tmp_name'], $firmasDir . $nombreFirma);
+    }
+
+    // INSERT con los campos nuevos
+    $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssssss", $nombre, $slug, $nombreImagen, $modalidad, $fecha_limite, $whatsapp_numero, $nombreFirma, $encargado_nombre);
 
     if ($stmt->execute()) {
         $evento_id = $stmt->insert_id;
         $stmt->close();
 
-        // Compatibilidad PHP < 7 (sin operador ??)
+        // Captura de fechas/horarios
         $fechas       = isset($_POST["fechas"]) ? $_POST["fechas"] : array();
         $horas_inicio = isset($_POST["hora_inicio"]) ? $_POST["hora_inicio"] : array();
         $horas_fin    = isset($_POST["hora_fin"]) ? $_POST["hora_fin"] : array();
 
         if (!empty($fechas)) {
             $stmt_fecha = $conn->prepare("INSERT INTO eventos_fechas (evento_id, fecha, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)");
-            // Variables que se actualizarán en el loop (bind por referencia)
+            // bind por referencia
             $fecha = $hora_inicio = $hora_fin = null;
             $stmt_fecha->bind_param("isss", $evento_id, $fecha, $hora_inicio, $hora_fin);
 
@@ -66,7 +80,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 }
 
-// Compatibilidad PHP < 7
+// URL del formulario
 $slugValue = isset($_GET['slug']) ? $_GET['slug'] : '';
 $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : '';
 ?>
@@ -121,9 +135,11 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
     <?php endif; ?>
 
     <form id="form-evento" method="POST" enctype="multipart/form-data" class="space-y-6">
+      <!-- Datos básicos -->
       <input type="text" name="nombre" placeholder="Nombre del evento" required class="w-full p-3 border border-gray-300 rounded-xl" />
       <input type="file" name="imagen" accept="image/*" required class="w-full border border-gray-300 rounded-xl p-2" />
 
+      <!-- Duración / fechas -->
       <div>
         <label class="font-semibold text-gray-700">¿Cuántos días dura el evento?</label>
         <select id="num_dias" class="w-full p-3 border border-gray-300 rounded-xl mt-2">
@@ -133,9 +149,9 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
           <?php endfor; ?>
         </select>
       </div>
-
       <div id="dias_container" class="space-y-4"></div>
 
+      <!-- Modalidad -->
       <div>
         <label class="font-semibold text-gray-700">Modalidad:</label>
         <select name="modalidad" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
@@ -145,10 +161,31 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         </select>
       </div>
 
+      <!-- Fecha límite -->
       <div>
         <label class="font-semibold text-gray-700">Fecha límite para confirmar asistencia:</label>
         <input type="date" name="fecha_limite" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
       </div>
+
+      <!-- NUEVOS CAMPOS -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="font-semibold text-gray-700">Número de WhatsApp (formato internacional):</label>
+          <input type="text" name="whatsapp_numero" placeholder="Ej: 573001234567" class="w-full p-3 border border-gray-300 rounded-xl mt-2" />
+          <p class="text-xs text-gray-500 mt-1">Solo números, con código de país (Ej: 57 para Colombia).</p>
+        </div>
+        <div>
+          <label class="font-semibold text-gray-700">Nombre del encargado (para la firma):</label>
+          <input type="text" name="encargado_nombre" placeholder="Ej: Juan Pérez" class="w-full p-3 border border-gray-300 rounded-xl mt-2" />
+        </div>
+      </div>
+
+      <div>
+        <label class="font-semibold text-gray-700">Firma (imagen PNG/JPG, ideal fondo transparente):</label>
+        <input type="file" name="firma_imagen" accept="image/png, image/jpeg, image/webp" class="w-full border border-gray-300 rounded-xl p-2 mt-2" />
+        <p class="text-xs text-gray-500 mt-1">Se guardará en <code>/uploads/firmas/</code>. Opcional.</p>
+      </div>
+      <!-- /NUEVOS CAMPOS -->
 
       <div class="text-center">
         <button type="submit" class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 px-8 rounded-xl transition-all">
