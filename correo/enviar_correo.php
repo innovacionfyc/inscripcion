@@ -29,6 +29,7 @@ class CorreoDenuncia {
         try {
             // ====== SMTP según tu proyecto anterior ======
             $mail->SMTPDebug  = 0;
+            $mail->Debugoutput = 'html';
             $mail->isSMTP();
             $mail->Host       = 'smtp-relay.gmail.com';
             $mail->Port       = 25;              // sin TLS explícito
