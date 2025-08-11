@@ -213,7 +213,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <div class="bg-white p-6 rounded-2xl shadow-2xl text-center max-w-md">
             <h2 class="text-xl font-bold text-[#942934] mb-4">🎉 ¡Inscripción exitosa!</h2>
             <p class="text-gray-700 mb-4">Gracias por registrarte. Hemos enviado un correo de confirmación a tu email corporativo.</p>
-            <button onclick="document.getElementById('modalGracias').remove()" class="bg-[#d32f57] text-white px-6 py-2 rounded-xl hover:bg-[#942934] transition-all">
+            <button onclick="cerrarModalGracias()" class="bg-[#d32f57] text-white px-6 py-2 rounded-xl hover:bg-[#942934] transition-all">
               Cerrar
             </button>
           </div>
@@ -273,5 +273,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       }
       return true;
     }
+
+      function cerrarModalGracias() {
+        // si quieres ver el cierre del modal antes de salir:
+        var m = document.getElementById('modalGracias');
+        if (m) m.remove();
+        // redirigir a la web principal
+        window.location.href = "https://fycconsultores.com/inicio";
+      }
+
   </script>
 </html>
