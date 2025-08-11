@@ -1,3 +1,8 @@
+<?php /* DEBUG: quitar luego */
+echo '<!-- '; var_dump($_SESSION); echo ' -->';
+?>
+
+
 <?php
 require_once __DIR__ . '/_auth.php';
 require_login();
