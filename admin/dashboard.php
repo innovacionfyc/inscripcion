@@ -1,12 +1,19 @@
 <?php
 require_once __DIR__ . '/_auth.php';
 require_login();
-$show_back = false; // en el dashboard no mostramos "Volver"
-include __DIR__ . '/_topbar.php';
-require_once __DIR__ . '/db/conexion.php';
-require_once __DIR__ . "/helpers/audit.php";
 
+$show_back = false; // en el dashboard no mostramos "Volver"
+
+// 🔧 CONEXIÓN: sube un nivel y entra a /db/
+require_once dirname(__DIR__) . '/db/conexion.php';
+
+// Helper de auditoría (está dentro de /admin/helpers/)
+require_once __DIR__ . '/helpers/audit.php';
+
+// Registrar acceso al dashboard
 log_activity($conn, 'enter_module', 'modulo', 'dashboard');
+
+include __DIR__ . '/_topbar.php';
 ?>
 
 <!DOCTYPE html>
