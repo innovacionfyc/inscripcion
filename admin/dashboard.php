@@ -38,6 +38,16 @@ include __DIR__ . '/_topbar.php';
         <p class="text-gray-600 text-sm">Crear/eliminar usuarios y asignar permisos.</p>
       </a>
       <?php endif; ?>
+
+      <?php if (isset($_SESSION['usuario']) && isset($_SESSION['usuario']['rol']) && $_SESSION['usuario']['rol'] === 'admin'): ?>
+        <a href="actividad.php" class="block bg-white border border-gray-300 rounded-2xl shadow-2xl p-6 hover:scale-[1.01] transition-all duration-300">
+          <div class="flex items-center gap-3">
+            <span class="text-3xl">📈</span>
+            <h3 class="text-xl font-bold" style="color:#942934;">Actividad</h3>
+          </div>
+          <p class="mt-2 text-gray-600">Últimos accesos y movimientos del panel.</p>
+        </a>
+      <?php endif; ?>
     </div>
   </div>
 </body>
