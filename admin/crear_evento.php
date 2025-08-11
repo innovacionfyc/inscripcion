@@ -5,9 +5,9 @@ ini_set('display_errors', 1);
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
 require_once __DIR__ . '/_auth.php';
+include __DIR__ . '/_topbar.php';
 $back_to = 'dashboard.php';
 $show_back = true;
-include __DIR__ . '/_topbar.php';
 
 
 function generarSlug($texto) {
