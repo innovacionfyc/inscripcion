@@ -68,8 +68,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['uid']    = (int)$id;
                         $_SESSION['nombre'] = $nombre;
                         $_SESSION['rol']    = $rol;
-
-                        // (Opcional) también puedes guardar arreglo 'usuario'
                         $_SESSION['usuario'] = array(
                             'id'     => (int)$id,
                             'nombre' => $nombre,
@@ -77,12 +75,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'email'  => $email
                         );
 
-                        // ✅ Registra el evento de login ANTES del redirect
+                        // ✅ LIBERAR el statement ANTES de auditar (evita "commands out of sync")
+                        if (method_exists($stmt, 'free_result')) { $stmt->free_result(); }
+                        $stmt->close();
+
+                        // ✅ Registrar el login
                         log_activity($conn, 'login', 'usuario', (int)$id);
 
-                        // Redirige
-                        $stmt->close();
-                        $conn->close();
+                        // Redirige al dashboard
                         header('Location: dashboard.php');
                         exit;
                     }
@@ -90,7 +90,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $err = "Usuario o contraseña inválidos.";
                 }
             }
-            if ($stmt) { $stmt->close(); }
+            // Si llegamos aquí sin éxito de login, cerramos el stmt si sigue abierto
+            if ($stmt && method_exists($stmt, 'close')) { @$stmt->close(); }
         }
     }
 }
