@@ -2,12 +2,10 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+require_once __DIR__ . '/_auth.php';
+require_login();
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
-$back_to = 'dashboard.php';
-require_once __DIR__ . '/_auth.php';
-$show_back = true;
-include __DIR__ . '/_topbar.php';
 
 
 function generarSlug($texto) {
@@ -97,6 +95,11 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
   <link rel="stylesheet" href="../assets/css/output.css">
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <?php
+  $back_to = 'dashboard.php';
+  $show_back = true;
+  include __DIR__ . '/_topbar.php';
+  ?>
   <div class="w-full max-w-4xl bg-white rounded-2xl shadow-2xl p-8 mt-10 space-y-6">
     <h1 class="text-2xl font-bold text-[#942934] text-center mb-4">📆 Crear nuevo evento</h1>
 
