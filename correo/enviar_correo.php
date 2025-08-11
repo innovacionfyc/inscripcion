@@ -141,28 +141,23 @@ class CorreoDenuncia {
                   </p>';
             }
 
-            // Firma (imagen + nombre)
-            // Firma (imagen + nombre) — preferir embebida por CID
-            $firmaHtml = '';
+            // Firma (solo imagen) — preferir embebida por CID
+            $firmaHtml   = '';
+            $firmaImgTag = '';
+
             if (!empty($data['firma_file']) && is_file($data['firma_file'])) {
                 $cidFirma = 'firma_' . md5($data['firma_file']);
-                // tercer parámetro es el nombre sugerido del archivo
-                $mail->addEmbeddedImage($data['firma_file'], $cidFirma, 'firma.png');
-                $firmaImgTag = "<img src='cid:{$cidFirma}' alt='Firma' style='max-height:90px'><br>";
+                // Detecta mime si está disponible (sino usa image/png)
+                $mime = function_exists('mime_content_type') ? mime_content_type($data['firma_file']) : 'image/png';
+                $mail->addEmbeddedImage($data['firma_file'], $cidFirma, basename($data['firma_file']), 'base64', $mime);
+                $firmaImgTag = "<img src='cid:{$cidFirma}' alt='Firma' style='width:300px; height:auto; display:block; margin:10px auto 0;'>";
             } elseif (!empty($data['firma_url_public'])) {
-                // Fallback a URL pública
-                $firmaImgTag = '<img src="'.htmlspecialchars($data['firma_url_public'], ENT_QUOTES, 'UTF-8').'" alt="Firma" style="max-height:90px"><br>';
-            } else {
-                $firmaImgTag = '';
+                // Fallback a URL pública (por si acaso)
+                $firmaImgTag = '<img src="'.htmlspecialchars($data['firma_url_public'], ENT_QUOTES, 'UTF-8').'" alt="Firma" style="width:300px; height:auto; display:block; margin:10px auto 0;">';
             }
 
-            if ($firmaImgTag || !empty($data['encargado_nombre'])) {
-                $firmaHtml  = '<div style="margin-top:18px">';
-                $firmaHtml .= $firmaImgTag;
-                if (!empty($data['encargado_nombre'])) {
-                    $firmaHtml .= '<strong>'.htmlspecialchars($data['encargado_nombre'], ENT_QUOTES, 'UTF-8').'</strong>';
-                }
-                $firmaHtml .= '</div>';
+            if ($firmaImgTag) {
+                $firmaHtml = '<div style="margin-top:18px; text-align:center;">' . $firmaImgTag . '</div>';
             }
 
             // HTML final
