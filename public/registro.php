@@ -253,7 +253,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         alert("El celular debe contener entre 7 y 15 dígitos.");
         return false;
       }
-      if (!/\\S+@\\S+\\.\\S+/.test(correo)) {
+      const correo = document.querySelector('input[name="email_corporativo"]').value.trim();
+
+      if (!/^\S+@\S+\.\S+$/.test(correo)) {
         alert("Correo corporativo inválido.");
         return false;
       }
