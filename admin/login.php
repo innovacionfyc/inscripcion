@@ -98,10 +98,6 @@ $conn->close();
       <input type="password" name="clave" placeholder="Contraseña" required class="w-full p-3 border border-gray-300 rounded-xl" />
       <button type="submit" class="w-full bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 rounded-xl transition-all">Ingresar</button>
     </form>
-
-    <p class="text-center mt-4 text-sm text-gray-500">
-      ¿Problemas? <a href="login.php?debug=1" class="underline">Modo debug</a>
-    </p>
   </div>
 </body>
 </html>
