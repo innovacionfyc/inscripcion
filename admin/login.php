@@ -3,18 +3,15 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 require_once dirname(__DIR__) . '/db/conexion.php';
-require_once __DIR__ . '/helpers/audit.php'; // ← Agregada esta línea
+require_once __DIR__ . '/helpers/audit.php';
 
-if (session_status() === PHP_SESSION_NONE) { 
-    session_start(); 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
-
-// Este log va aquí SOLO si ya tienes la sesión del usuario armada
-log_activity($conn, 'login', 'usuario', $_SESSION['usuario']['id']);
 
 // si ya está logueado -> dashboard
 if (!empty($_SESSION['uid'])) {
-    header('Location: dashboard.php'); 
+    header('Location: dashboard.php');
     exit;
 }
 
@@ -25,11 +22,9 @@ if (isset($_GET['debug'])) {
     echo "PHP OK\n";
     echo "MySQL host: " . $conn->host_info . "\n";
 
-    // ¿existe la tabla usuarios?
     $rs = $conn->query("SHOW TABLES LIKE 'usuarios'");
     echo $rs && $rs->num_rows ? "Tabla usuarios: OK\n" : "Tabla usuarios: NO ENCONTRADA\n";
 
-    // ¿hay al menos 1 usuario activo?
     $rs2 = $conn->query("SELECT id, usuario, rol, activo FROM usuarios LIMIT 3");
     if ($rs2) {
         echo "Usuarios (sample):\n";
@@ -69,12 +64,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     } elseif (!password_verify($clave, $hash)) {
                         $err = "Usuario o contraseña inválidos.";
                     } else {
-                        $_SESSION['uid']    = $id;
+                        // ✅ Login exitoso: arma la sesión
+                        $_SESSION['uid']    = (int)$id;
                         $_SESSION['nombre'] = $nombre;
                         $_SESSION['rol']    = $rol;
+
+                        // (Opcional) también puedes guardar arreglo 'usuario'
+                        $_SESSION['usuario'] = array(
+                            'id'     => (int)$id,
+                            'nombre' => $nombre,
+                            'rol'    => $rol,
+                            'email'  => $email
+                        );
+
+                        // ✅ Registra el evento de login ANTES del redirect
+                        log_activity($conn, 'login', 'usuario', (int)$id);
+
+                        // Redirige
                         $stmt->close();
                         $conn->close();
-                        header('Location: dashboard.php'); exit;
+                        header('Location: dashboard.php');
+                        exit;
                     }
                 } else {
                     $err = "Usuario o contraseña inválidos.";
