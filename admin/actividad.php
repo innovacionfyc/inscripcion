@@ -17,7 +17,7 @@ if (!($rolNorm === 'admin' || $rolNorm === 'administrador' || $rolNorm === 1)) {
 }
 
 // Conexión + helper
-require_once __DIR__ . "/../bd/conexion.php";  // ajusta si tu conexion.php está en otra ruta
+require_once __DIR__ . "/db/conexion.php";  // ajusta si tu conexion.php está en otra ruta
 require_once __DIR__ . "/helpers/audit.php";
 
 // Opcional: log de acceso al módulo
