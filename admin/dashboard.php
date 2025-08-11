@@ -44,7 +44,21 @@ include __DIR__ . '/_topbar.php';
       </a>
       <?php endif; ?>
 
-      <?php if (isset($_SESSION['usuario']) && isset($_SESSION['usuario']['rol']) && $_SESSION['usuario']['rol'] === 'admin'): ?>
+      <?php
+      // Detectar rol desde varias posibles llaves
+      $role = null;
+      if (isset($_SESSION['usuario']) && is_array($_SESSION['usuario'])) {
+          if (isset($_SESSION['usuario']['rol']))        $role = $_SESSION['usuario']['rol'];
+          elseif (isset($_SESSION['usuario']['tipo']))   $role = $_SESSION['usuario']['tipo'];
+          elseif (isset($_SESSION['usuario']['perfil'])) $role = $_SESSION['usuario']['perfil'];
+      }
+      if (!$role && isset($_SESSION['rol']))    $role = $_SESSION['rol'];
+      if (!$role && isset($_SESSION['perfil'])) $role = $_SESSION['perfil'];
+      if (!$role && isset($_SESSION['tipo']))   $role = $_SESSION['tipo'];
+      $roleNorm = is_string($role) ? strtolower(trim($role)) : $role;
+      ?>
+
+      <?php if ($roleNorm === 'admin' || $roleNorm === 'administrador' || $roleNorm === 1): ?>
         <a href="actividad.php" class="block bg-white border border-gray-300 rounded-2xl shadow-2xl p-6 hover:scale-[1.01] transition-all duration-300">
           <div class="flex items-center gap-3">
             <span class="text-3xl">📈</span>
@@ -53,6 +67,7 @@ include __DIR__ . '/_topbar.php';
           <p class="mt-2 text-gray-600">Últimos accesos y movimientos del panel.</p>
         </a>
       <?php endif; ?>
+
     </div>
   </div>
 </body>
