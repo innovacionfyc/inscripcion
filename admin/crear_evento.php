@@ -4,6 +4,8 @@ ini_set('display_errors', 1);
 
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
+require_once __DIR__ . '/_auth.php';
+
 
 function generarSlug($texto) {
     $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $texto)));
@@ -183,7 +185,6 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
       <div>
         <label class="font-semibold text-gray-700">Firma (imagen PNG/JPG, ideal fondo transparente):</label>
         <input type="file" name="firma_imagen" accept="image/png, image/jpeg, image/webp" class="w-full border border-gray-300 rounded-xl p-2 mt-2" />
-        <p class="text-xs text-gray-500 mt-1">Se guardará en <code>/uploads/firmas/</code>. Opcional.</p>
       </div>
       <!-- /NUEVOS CAMPOS -->
 
