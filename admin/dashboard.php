@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/_auth.php';
 require_login();
+$show_back = false; // en el dashboard no mostramos "Volver"
+include __DIR__ . '/_topbar.php';
 ?>
 <!DOCTYPE html>
 <html lang="es">

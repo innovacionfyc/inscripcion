@@ -3,6 +3,9 @@ require_once __DIR__ . '/_auth.php';
 require_login();
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
+$back_to = 'dashboard.php';
+$show_back = true;
+include __DIR__ . '/_topbar.php';
 
 // Traer eventos (contando inscritos)
 $sql = "SELECT e.id, e.nombre, e.slug, e.modalidad, e.fecha_limite, e.imagen,
