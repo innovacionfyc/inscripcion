@@ -130,6 +130,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $path_pdf = null;
         }
 
+        // === FIRMA: ruta de archivo en el servidor para embeber por CID ===
+        $firma_file = '';
+        if (!empty($evento['firma_imagen'])) {
+            $tmp = dirname(__DIR__) . '/uploads/firmas/' . $evento['firma_imagen']; // ruta física
+            if (file_exists($tmp)) {
+                $firma_file = $tmp;
+            } else {
+                error_log('Firma no encontrada en disco: ' . $tmp);
+            }
+        }
+
         // Imagen del evento (embebida) + URL pública opcional
         $img_file  = dirname(__DIR__) . '/uploads/eventos/' . $evento['imagen'];
         $img_pub   = base_url('uploads/eventos/' . $evento['imagen']);
@@ -156,6 +167,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             'url_imagen'       => $img_file,              // para addEmbeddedImage
             'url_imagen_public'=> $img_pub,               // por si quieres referenciar URL
             'adjunto_pdf'      => $path_pdf,
+            'firma_file'       => $firma_file,                 // ruta física de la firma para embeber
+            'encargado_nombre' => $evento['encargado_nombre'], // nombre que va debajo
             'lugar'            => $es_presencial ? "Centro de Convenciones Cafam Floresta<br>Av. Cra. 68 No. 90-88, Bogotá - Salón Sauces" : "",
 
             // Encabezado “Señores:”
