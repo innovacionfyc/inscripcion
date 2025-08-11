@@ -66,9 +66,9 @@ $conn->close();
               </button>
 
               <!-- Exportar CSV -->
-              <a href="evento_export.php?id=<?php echo (int)$ev['id']; ?>"
+              <a href="evento_export_xls.php?id=<?php echo (int)$ev['id']; ?>"
                  class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-sm">
-                ⬇️ Exportar inscritos (CSV)
+                ⬇️ Exportar inscritos (Excel)
               </a>
 
               <!-- Eliminar (solo admin) -->
