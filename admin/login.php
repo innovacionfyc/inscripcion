@@ -10,26 +10,71 @@ if (!empty($_SESSION['uid'])) {
     header('Location: dashboard.php'); exit;
 }
 
+// ===== DEBUG OPCIONAL =====
+// navega a /admin/login.php?debug=1 para ver chequeos
+if (isset($_GET['debug'])) {
+    echo "<pre>";
+    echo "PHP OK\n";
+    echo "MySQL host: " . $conn->host_info . "\n";
+
+    // ¿existe la tabla usuarios?
+    $rs = $conn->query("SHOW TABLES LIKE 'usuarios'");
+    echo $rs && $rs->num_rows ? "Tabla usuarios: OK\n" : "Tabla usuarios: NO ENCONTRADA\n";
+
+    // ¿hay al menos 1 usuario activo?
+    $rs2 = $conn->query("SELECT id, usuario, rol, activo FROM usuarios LIMIT 3");
+    if ($rs2) {
+        echo "Usuarios (sample):\n";
+        while ($row = $rs2->fetch_assoc()) {
+            echo " - id={$row['id']} usuario={$row['usuario']} rol={$row['rol']} activo={$row['activo']}\n";
+        }
+    } else {
+        echo "Error consultando usuarios: " . $conn->error . "\n";
+    }
+    echo "</pre>";
+    exit;
+}
+// ==========================
+
 $err = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usuario = isset($_POST['usuario']) ? trim($_POST['usuario']) : '';
     $clave   = isset($_POST['clave']) ? $_POST['clave'] : '';
 
-    $stmt = $conn->prepare("SELECT id, nombre, usuario, email, password_hash, rol, activo 
-                            FROM usuarios WHERE usuario = ? LIMIT 1");
-    $stmt->bind_param('s', $usuario);
-    $stmt->execute();
-    $stmt->bind_result($id, $nombre, $usr, $email, $hash, $rol, $activo);
-    if ($stmt->fetch() && $activo == 1 && password_verify($clave, $hash)) {
-        $_SESSION['uid']   = $id;
-        $_SESSION['nombre']= $nombre;
-        $_SESSION['rol']   = $rol;
-        $stmt->close(); $conn->close();
-        header('Location: dashboard.php'); exit;
+    if ($usuario === '' || $clave === '') {
+        $err = 'Completa usuario y contraseña.';
     } else {
-        $err = 'Usuario o contraseña inválidos.';
+        $sql = "SELECT id, nombre, usuario, email, password_hash, rol, activo 
+                FROM usuarios WHERE usuario = ? LIMIT 1";
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            $err = "Error preparando consulta: " . $conn->error;
+        } else {
+            $stmt->bind_param('s', $usuario);
+            if (!$stmt->execute()) {
+                $err = "Error ejecutando consulta: " . $stmt->error;
+            } else {
+                $stmt->bind_result($id, $nombre, $usr, $email, $hash, $rol, $activo);
+                if ($stmt->fetch()) {
+                    if ((int)$activo !== 1) {
+                        $err = "Usuario inactivo.";
+                    } elseif (!password_verify($clave, $hash)) {
+                        $err = "Usuario o contraseña inválidos.";
+                    } else {
+                        $_SESSION['uid']    = $id;
+                        $_SESSION['nombre'] = $nombre;
+                        $_SESSION['rol']    = $rol;
+                        $stmt->close();
+                        $conn->close();
+                        header('Location: dashboard.php'); exit;
+                    }
+                } else {
+                    $err = "Usuario o contraseña inválidos.";
+                }
+            }
+            if ($stmt) { $stmt->close(); }
+        }
     }
-    $stmt->close();
 }
 $conn->close();
 ?>
@@ -53,6 +98,10 @@ $conn->close();
       <input type="password" name="clave" placeholder="Contraseña" required class="w-full p-3 border border-gray-300 rounded-xl" />
       <button type="submit" class="w-full bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 rounded-xl transition-all">Ingresar</button>
     </form>
+
+    <p class="text-center mt-4 text-sm text-gray-500">
+      ¿Problemas? <a href="login.php?debug=1" class="underline">Modo debug</a>
+    </p>
   </div>
 </body>
 </html>
