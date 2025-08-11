@@ -1,14 +1,14 @@
-<?php /* DEBUG: quitar luego */
-echo '<!-- '; var_dump($_SESSION); echo ' -->';
-?>
-
-
 <?php
 require_once __DIR__ . '/_auth.php';
 require_login();
 $show_back = false; // en el dashboard no mostramos "Volver"
 include __DIR__ . '/_topbar.php';
+require_once __DIR__ . "/bd/conexion.php";
+require_once __DIR__ . "/helpers/audit.php";
+
+log_activity($conn, 'enter_module', 'modulo', 'dashboard');
 ?>
+
 <!DOCTYPE html>
 <html lang="es">
 <head>

@@ -1,36 +1,39 @@
 <?php
-// helpers/audit.php
-function getClientIp(): string {
-    $keys = ['HTTP_CLIENT_IP','HTTP_X_FORWARDED_FOR','HTTP_X_FORWARDED','HTTP_X_CLUSTER_CLIENT_IP','HTTP_FORWARDED_FOR','HTTP_FORWARDED','REMOTE_ADDR'];
+// admin/helpers/audit.php
+if (!function_exists('audit_get_ip')) {
+  function audit_get_ip() {
+    $keys = array('HTTP_CLIENT_IP','HTTP_X_FORWARDED_FOR','HTTP_X_FORWARDED','HTTP_X_CLUSTER_CLIENT_IP','HTTP_FORWARDED_FOR','HTTP_FORWARDED','REMOTE_ADDR');
     foreach ($keys as $k) {
-        if (!empty($_SERVER[$k])) {
-            $ipList = explode(',', $_SERVER[$k]);
-            return trim($ipList[0]);
-        }
+      if (!empty($_SERVER[$k])) {
+        $ipList = explode(',', $_SERVER[$k]);
+        return trim($ipList[0]);
+      }
     }
     return '0.0.0.0';
+  }
 }
 
-function log_activity(mysqli $conn, string $action, ?string $entity_type = null, $entity_id = null, array $meta = []): void {
-    if (!isset($_SESSION)) { session_start(); }
-    $user_id   = $_SESSION['usuario']['id'] ?? null; // ajusta a tu estructura de sesión
-    $ip        = getClientIp();
-    $userAgent = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 255);
-    $metaJson  = $meta ? json_encode($meta, JSON_UNESCAPED_UNICODE) : null;
+if (!function_exists('log_activity')) {
+  function log_activity($conn, $action, $entity_type = NULL, $entity_id = NULL, $meta = NULL) {
+    if (session_status() === PHP_SESSION_NONE) { session_start(); }
+    $user_id = NULL;
+    if (isset($_SESSION['usuario']) && is_array($_SESSION['usuario']) && isset($_SESSION['usuario']['id'])) {
+      $user_id = $_SESSION['usuario']['id'];
+    } elseif (isset($_SESSION['user_id'])) {
+      $user_id = $_SESSION['user_id'];
+    }
+
+    $ip  = audit_get_ip();
+    $ua  = isset($_SERVER['HTTP_USER_AGENT']) ? substr($_SERVER['HTTP_USER_AGENT'], 0, 255) : '';
+    if (is_array($meta)) { $meta = json_encode($meta); }
 
     $sql = "INSERT INTO audit_log (user_id, action, entity_type, entity_id, meta, ip, user_agent)
             VALUES (?, ?, ?, ?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param(
-        "issssss",
-        $user_id,
-        $action,
-        $entity_type,
-        $entity_id,
-        $metaJson,
-        $ip,
-        $userAgent
-    );
-    $stmt->execute();
-    $stmt->close();
+    if ($stmt) {
+      $stmt->bind_param("issssss", $user_id, $action, $entity_type, $entity_id, $meta, $ip, $ua);
+      $stmt->execute();
+      $stmt->close();
+    }
+  }
 }

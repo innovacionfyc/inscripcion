@@ -3,11 +3,19 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 require_once dirname(__DIR__) . '/db/conexion.php';
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
+require_once __DIR__ . '/helpers/audit.php'; // ← Agregada esta línea
+
+if (session_status() === PHP_SESSION_NONE) { 
+    session_start(); 
+}
+
+// Este log va aquí SOLO si ya tienes la sesión del usuario armada
+log_activity($conn, 'login', 'usuario', $_SESSION['usuario']['id']);
 
 // si ya está logueado -> dashboard
 if (!empty($_SESSION['uid'])) {
-    header('Location: dashboard.php'); exit;
+    header('Location: dashboard.php'); 
+    exit;
 }
 
 // ===== DEBUG OPCIONAL =====

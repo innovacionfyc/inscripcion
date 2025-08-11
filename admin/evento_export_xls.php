@@ -2,10 +2,22 @@
 // admin/evento_export_xls.php  (compatible con PHP antiguo)
 require_once __DIR__ . '/_auth.php';
 require_login();
-require_once dirname(__DIR__) . '/db/conexion.php';
 
+// Conexión a la BD (usa la ruta que corresponda en tu proyecto)
+require_once __DIR__ . '/bd/conexion.php';           // ← si tu carpeta es /bd
+// require_once dirname(__DIR__) . '/db/conexion.php'; // ← si es /db
+
+// Helper de auditoría
+require_once __DIR__ . '/helpers/audit.php';
+
+// ID del evento (o slug si usas slug)
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($id <= 0) { http_response_code(400); echo "Evento inválido"; exit; }
+
+// Registrar exportación (ahora sí tenemos $conn e ID)
+log_activity($conn, 'export_inscritos', 'evento', $id, array('formato' => 'xlsx'));
+
+// ... aquí sigues con la generación del XLSX/CSV y el output
 
 // Nombre del evento
 $evNombre = 'evento';
