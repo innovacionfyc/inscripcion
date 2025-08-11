@@ -241,9 +241,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <script src="../assets/js/jquery.min.js"></script>
   <script>
     function validarFormulario() {
-      var correo = document.querySelector('input[name="email_corporativo"]').value;
-      var cedula = document.querySelector('input[name="cedula"]').value;
-      var celular = document.querySelector('input[name="celular"]').value;
+      var correoEl = document.querySelector('input[name="email_corporativo"]');
+      var correo   = (correoEl ? correoEl.value : '').trim();
+      var cedula   = document.querySelector('input[name="cedula"]').value.trim();
+      var celular  = document.querySelector('input[name="celular"]').value.trim();
 
       if (!/^\d+$/.test(cedula)) {
         alert("La cédula debe contener solo números.");
@@ -253,8 +254,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         alert("El celular debe contener entre 7 y 15 dígitos.");
         return false;
       }
-      const correo = document.querySelector('input[name="email_corporativo"]').value.trim();
-
       if (!/^\S+@\S+\.\S+$/.test(correo)) {
         alert("Correo corporativo inválido.");
         return false;
@@ -262,5 +261,4 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       return true;
     }
   </script>
-</body>
 </html>

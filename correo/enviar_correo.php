@@ -142,12 +142,23 @@ class CorreoDenuncia {
             }
 
             // Firma (imagen + nombre)
+            // Firma (imagen + nombre) — preferir embebida por CID
             $firmaHtml = '';
-            if (!empty($data['firma_url_public']) || !empty($data['encargado_nombre'])) {
-                $firmaHtml .= '<div style="margin-top:18px">';
-                if (!empty($data['firma_url_public'])) {
-                    $firmaHtml .= '<img src="'.htmlspecialchars($data['firma_url_public'], ENT_QUOTES, 'UTF-8').'" alt="Firma" style="max-height:90px"><br>';
-                }
+            if (!empty($data['firma_file']) && is_file($data['firma_file'])) {
+                $cidFirma = 'firma_' . md5($data['firma_file']);
+                // tercer parámetro es el nombre sugerido del archivo
+                $mail->addEmbeddedImage($data['firma_file'], $cidFirma, 'firma.png');
+                $firmaImgTag = "<img src='cid:{$cidFirma}' alt='Firma' style='max-height:90px'><br>";
+            } elseif (!empty($data['firma_url_public'])) {
+                // Fallback a URL pública
+                $firmaImgTag = '<img src="'.htmlspecialchars($data['firma_url_public'], ENT_QUOTES, 'UTF-8').'" alt="Firma" style="max-height:90px"><br>';
+            } else {
+                $firmaImgTag = '';
+            }
+
+            if ($firmaImgTag || !empty($data['encargado_nombre'])) {
+                $firmaHtml  = '<div style="margin-top:18px">';
+                $firmaHtml .= $firmaImgTag;
                 if (!empty($data['encargado_nombre'])) {
                     $firmaHtml .= '<strong>'.htmlspecialchars($data['encargado_nombre'], ENT_QUOTES, 'UTF-8').'</strong>';
                 }
