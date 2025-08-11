@@ -95,12 +95,12 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
   <link rel="stylesheet" href="../assets/css/output.css">
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-4xl bg-white rounded-2xl shadow-2xl p-8 mt-10 space-y-6">
   <?php
   $back_to = 'dashboard.php';
   $show_back = true;
   include __DIR__ . '/_topbar.php';
   ?>
-  <div class="w-full max-w-4xl bg-white rounded-2xl shadow-2xl p-8 mt-10 space-y-6">
     <h1 class="text-2xl font-bold text-[#942934] text-center mb-4">📆 Crear nuevo evento</h1>
 
     <?php if (isset($_GET['ok']) && $_GET['ok'] == 1 && $slugValue): ?>
