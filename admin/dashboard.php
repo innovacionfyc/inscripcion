@@ -32,13 +32,13 @@ include __DIR__ . '/_topbar.php';
 
     <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
       <!-- Crear evento -->
-      <a href="crear_evento.php" class="block bg-white rounded-2xl shadow p-6 border hover:shadow-lg transition">
+      <a href="crear_evento.php" class="block bg-white rounded-2xl shadow p-6 border hover:scale-[1.01] transition-all duration-300">
         <div class="text-[#d32f57] text-xl font-bold mb-2">➕ Crear evento</div>
         <p class="text-gray-600 text-sm">Configura un nuevo evento y obtén su enlace de inscripción.</p>
       </a>
 
       <!-- Eventos activos -->
-      <a href="eventos.php" class="block bg-white rounded-2xl shadow p-6 border hover:shadow-lg transition">
+      <a href="eventos.php" class="block bg-white rounded-2xl shadow p-6 border hover:scale-[1.01] transition-all duration-300">
         <div class="text-[#d32f57] text-xl font-bold mb-2">📅 Eventos activos</div>
         <p class="text-gray-600 text-sm">Ver lista, copiar enlace, exportar inscritos o eliminar.</p>
       </a>
