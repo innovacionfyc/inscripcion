@@ -16,8 +16,8 @@ if (!($rolNorm === 'admin' || $rolNorm === 'administrador' || $rolNorm === 1)) {
   header("Location: login.php"); exit;
 }
 
-// Conexión + helper
-require_once __DIR__ . "/db/conexion.php";  // ajusta si tu conexion.php está en otra ruta
+// ✅ Conexión + helper (db está fuera de /admin)
+require_once dirname(__DIR__) . "/db/conexion.php";
 require_once __DIR__ . "/helpers/audit.php";
 
 // Opcional: log de acceso al módulo
