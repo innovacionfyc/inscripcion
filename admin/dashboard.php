@@ -45,7 +45,7 @@ include __DIR__ . '/_topbar.php';
 
       <!-- Usuarios (solo admin) -->
       <?php if (!empty($_SESSION['rol']) && $_SESSION['rol']==='admin'): ?>
-      <a href="usuarios.php" class="block bg-white rounded-2xl shadow p-6 border hover:shadow-lg transition">
+      <a href="usuarios.php" class="block bg-white rounded-2xl shadow p-6 border hover:scale-[1.01] transition-all duration-300">
         <div class="text-[#d32f57] text-xl font-bold mb-2">👥 Usuarios y roles</div>
         <p class="text-gray-600 text-sm">Crear/eliminar usuarios y asignar permisos.</p>
       </a>
@@ -68,10 +68,10 @@ include __DIR__ . '/_topbar.php';
       <?php if ($roleNorm === 'admin' || $roleNorm === 'administrador' || $roleNorm === 1): ?>
         <a href="actividad.php" class="block bg-white border border-gray-300 rounded-2xl shadow-2xl p-6 hover:scale-[1.01] transition-all duration-300">
           <div class="flex items-center gap-3">
-            <span class="text-3xl">📈</span>
-            <h3 class="text-xl font-bold" style="color:#942934;">Actividad</h3>
+            <span class="text-3xl"></span>
+            <h3 class="text-[#d32f57] text-xl font-bold mb-2">📈 Actividad</h3>
           </div>
-          <p class="mt-2 text-gray-600">Últimos accesos y movimientos del panel.</p>
+          <p class="text-gray-600 text-sm">Últimos accesos y movimientos del panel.</p>
         </a>
       <?php endif; ?>
 
