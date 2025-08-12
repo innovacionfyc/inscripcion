@@ -7,67 +7,59 @@ require_login();
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
 
-
 function generarSlug($texto) {
     $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $texto)));
     return $slug;
 }
 
+// 🔹 Obtener lista de comerciales
+$comerciales = [];
+$sqlCom = "SELECT id, nombre, email FROM usuarios WHERE rol = 'comercial' ORDER BY nombre ASC";
+$resCom = $conn->query($sqlCom);
+if ($resCom) {
+    while ($row = $resCom->fetch_assoc()) {
+        $comerciales[] = $row;
+    }
+}
+
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $nombre           = isset($_POST["nombre"]) ? $_POST["nombre"] : '';
+    $nombre           = $_POST["nombre"] ?? '';
     $slug             = generarSlug($nombre);
-    $modalidad        = isset($_POST["modalidad"]) ? $_POST["modalidad"] : '';
-    $fecha_limite     = isset($_POST["fecha_limite"]) ? $_POST["fecha_limite"] : '';
-    $whatsapp_numero  = isset($_POST["whatsapp_numero"]) ? trim($_POST["whatsapp_numero"]) : '';
-    $encargado_nombre = isset($_POST["encargado_nombre"]) ? trim($_POST["encargado_nombre"]) : '';
+    $modalidad        = $_POST["modalidad"] ?? '';
+    $fecha_limite     = $_POST["fecha_limite"] ?? '';
+    $comercial_id     = $_POST["comercial_id"] ?? null; // Nuevo campo
 
     // --- Upload imagen principal del evento ---
     $nombreImagen = '';
-    if (isset($_FILES['imagen']) && isset($_FILES['imagen']['error']) && $_FILES['imagen']['error'] === 0) {
+    if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] === 0) {
         $uploadsDir = dirname(__DIR__) . '/uploads/eventos/';
-        if (!is_dir($uploadsDir)) {
-            @mkdir($uploadsDir, 0775, true);
-        }
+        if (!is_dir($uploadsDir)) { @mkdir($uploadsDir, 0775, true); }
         $ext = pathinfo($_FILES['imagen']['name'], PATHINFO_EXTENSION);
         $nombreImagen = uniqid('evento_') . '.' . $ext;
-        @move_uploaded_file($_FILES['imagen']['tmp_name'], $uploadsDir . $nombreImagen);
+        move_uploaded_file($_FILES['imagen']['tmp_name'], $uploadsDir . $nombreImagen);
     }
 
-    // --- Upload firma del encargado (opcional) ---
-    $nombreFirma = '';
-    if (isset($_FILES['firma_imagen']) && isset($_FILES['firma_imagen']['error']) && $_FILES['firma_imagen']['error'] === 0) {
-        $firmasDir = dirname(__DIR__) . '/uploads/firmas/';
-        if (!is_dir($firmasDir)) {
-            @mkdir($firmasDir, 0775, true);
-        }
-        $extF = pathinfo($_FILES['firma_imagen']['name'], PATHINFO_EXTENSION);
-        $nombreFirma = uniqid('firma_') . '.' . $extF;
-        @move_uploaded_file($_FILES['firma_imagen']['tmp_name'], $firmasDir . $nombreFirma);
-    }
-
-    // INSERT con los campos nuevos
-    $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("ssssssss", $nombre, $slug, $nombreImagen, $modalidad, $fecha_limite, $whatsapp_numero, $nombreFirma, $encargado_nombre);
+    // INSERT con comercial_id
+    $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, fecha_limite, comercial_id) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("sssssi", $nombre, $slug, $nombreImagen, $modalidad, $fecha_limite, $comercial_id);
 
     if ($stmt->execute()) {
         $evento_id = $stmt->insert_id;
         $stmt->close();
 
         // Captura de fechas/horarios
-        $fechas       = isset($_POST["fechas"]) ? $_POST["fechas"] : array();
-        $horas_inicio = isset($_POST["hora_inicio"]) ? $_POST["hora_inicio"] : array();
-        $horas_fin    = isset($_POST["hora_fin"]) ? $_POST["hora_fin"] : array();
+        $fechas       = $_POST["fechas"] ?? [];
+        $horas_inicio = $_POST["hora_inicio"] ?? [];
+        $horas_fin    = $_POST["hora_fin"] ?? [];
 
         if (!empty($fechas)) {
             $stmt_fecha = $conn->prepare("INSERT INTO eventos_fechas (evento_id, fecha, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)");
-            // bind por referencia
-            $fecha = $hora_inicio = $hora_fin = null;
             $stmt_fecha->bind_param("isss", $evento_id, $fecha, $hora_inicio, $hora_fin);
 
             for ($i = 0; $i < count($fechas); $i++) {
                 $fecha       = $fechas[$i];
-                $hora_inicio = isset($horas_inicio[$i]) ? $horas_inicio[$i] : null;
-                $hora_fin    = isset($horas_fin[$i]) ? $horas_fin[$i] : null;
+                $hora_inicio = $horas_inicio[$i] ?? null;
+                $hora_fin    = $horas_fin[$i] ?? null;
                 $stmt_fecha->execute();
             }
             $stmt_fecha->close();
@@ -84,7 +76,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 }
 
 // URL del formulario
-$slugValue = isset($_GET['slug']) ? $_GET['slug'] : '';
+$slugValue = $_GET['slug'] ?? '';
 $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : '';
 ?>
 <!DOCTYPE html>
@@ -122,10 +114,7 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
               value="<?php echo htmlspecialchars($formURL, ENT_QUOTES, 'UTF-8'); ?>"
               readonly
             >
-            <button
-              onclick="copiarURL()"
-              class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold px-4 py-2 rounded-xl transition-all"
-            >
+            <button onclick="copiarURL()" class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold px-4 py-2 rounded-xl transition-all">
               📋 Copiar URL
             </button>
           </div>
@@ -175,24 +164,16 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         <input type="date" name="fecha_limite" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
       </div>
 
-      <!-- NUEVOS CAMPOS -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="font-semibold text-gray-700">Número de WhatsApp (formato internacional):</label>
-          <input type="text" name="whatsapp_numero" placeholder="Ej: 573001234567" class="w-full p-3 border border-gray-300 rounded-xl mt-2" />
-          <p class="text-xs text-gray-500 mt-1">Solo números, con código de país (Ej: 57 para Colombia).</p>
-        </div>
-        <div>
-          <label class="font-semibold text-gray-700">Nombre del encargado (para la firma):</label>
-          <input type="text" name="encargado_nombre" placeholder="Ej: Juan Pérez" class="w-full p-3 border border-gray-300 rounded-xl mt-2" />
-        </div>
-      </div>
-
+      <!-- Selección de Comercial -->
       <div>
-        <label class="font-semibold text-gray-700">Firma (imagen PNG/JPG, ideal fondo transparente):</label>
-        <input type="file" name="firma_imagen" accept="image/png, image/jpeg, image/webp" class="w-full border border-gray-300 rounded-xl p-2 mt-2" />
+        <label class="font-semibold text-gray-700">Comercial encargado:</label>
+        <select name="comercial_id" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
+          <option value="">Selecciona un comercial...</option>
+          <?php foreach ($comerciales as $c): ?>
+            <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['nombre']) ?> (<?= htmlspecialchars($c['email']) ?>)</option>
+          <?php endforeach; ?>
+        </select>
       </div>
-      <!-- /NUEVOS CAMPOS -->
 
       <div class="text-center">
         <button type="submit" class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 px-8 rounded-xl transition-all">
@@ -204,7 +185,6 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
 
   <script src="../assets/js/jquery.min.js"></script>
   <script>
-    // Generar bloques de días
     $('#num_dias').on('change', function () {
       var num = parseInt(this.value || 0, 10);
       var container = $('#dias_container');
