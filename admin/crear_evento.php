@@ -12,12 +12,12 @@ function generarSlug($texto) {
     return $slug;
 }
 
-// 🔹 Obtener lista de comerciales
+// 📌 Cargar usuarios comerciales desde la BD
 $comerciales = [];
-$sqlCom = "SELECT id, nombre, email FROM usuarios WHERE rol = 'comercial' ORDER BY nombre ASC";
-$resCom = $conn->query($sqlCom);
-if ($resCom) {
-    while ($row = $resCom->fetch_assoc()) {
+$sqlUsuarios = "SELECT id, nombre, email FROM usuarios WHERE activo = 1 ORDER BY nombre ASC";
+$resUsuarios = $conn->query($sqlUsuarios);
+if ($resUsuarios && $resUsuarios->num_rows > 0) {
+    while ($row = $resUsuarios->fetch_assoc()) {
         $comerciales[] = $row;
     }
 }
@@ -27,20 +27,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $slug             = generarSlug($nombre);
     $modalidad        = $_POST["modalidad"] ?? '';
     $fecha_limite     = $_POST["fecha_limite"] ?? '';
-    $comercial_id     = $_POST["comercial_id"] ?? null; // Nuevo campo
+    $comercial_id     = $_POST["comercial_user_id"] ?? null;
 
     // --- Upload imagen principal del evento ---
     $nombreImagen = '';
-    if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] === 0) {
+    if (!empty($_FILES['imagen']['name']) && $_FILES['imagen']['error'] === 0) {
         $uploadsDir = dirname(__DIR__) . '/uploads/eventos/';
-        if (!is_dir($uploadsDir)) { @mkdir($uploadsDir, 0775, true); }
+        if (!is_dir($uploadsDir)) @mkdir($uploadsDir, 0775, true);
         $ext = pathinfo($_FILES['imagen']['name'], PATHINFO_EXTENSION);
         $nombreImagen = uniqid('evento_') . '.' . $ext;
         move_uploaded_file($_FILES['imagen']['tmp_name'], $uploadsDir . $nombreImagen);
     }
 
-    // INSERT con comercial_id
-    $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, fecha_limite, comercial_id) VALUES (?, ?, ?, ?, ?, ?)");
+    // INSERT
+    $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, fecha_limite, comercial_user_id) VALUES (?, ?, ?, ?, ?, ?)");
     $stmt->bind_param("sssssi", $nombre, $slug, $nombreImagen, $modalidad, $fecha_limite, $comercial_id);
 
     if ($stmt->execute()) {
@@ -54,6 +54,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         if (!empty($fechas)) {
             $stmt_fecha = $conn->prepare("INSERT INTO eventos_fechas (evento_id, fecha, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)");
+            $fecha = $hora_inicio = $hora_fin = null;
             $stmt_fecha->bind_param("isss", $evento_id, $fecha, $hora_inicio, $hora_fin);
 
             for ($i = 0; $i < count($fechas); $i++) {
@@ -75,7 +76,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 }
 
-// URL del formulario
 $slugValue = $_GET['slug'] ?? '';
 $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : '';
 ?>
@@ -114,7 +114,10 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
               value="<?php echo htmlspecialchars($formURL, ENT_QUOTES, 'UTF-8'); ?>"
               readonly
             >
-            <button onclick="copiarURL()" class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold px-4 py-2 rounded-xl transition-all">
+            <button
+              onclick="copiarURL()"
+              class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold px-4 py-2 rounded-xl transition-all"
+            >
               📋 Copiar URL
             </button>
           </div>
@@ -132,11 +135,21 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
     <?php endif; ?>
 
     <form id="form-evento" method="POST" enctype="multipart/form-data" class="space-y-6">
-      <!-- Datos básicos -->
       <input type="text" name="nombre" placeholder="Nombre del evento" required class="w-full p-3 border border-gray-300 rounded-xl" />
       <input type="file" name="imagen" accept="image/*" required class="w-full border border-gray-300 rounded-xl p-2" />
 
-      <!-- Duración / fechas -->
+      <div>
+        <label class="font-semibold text-gray-700">Seleccionar comercial:</label>
+        <select name="comercial_user_id" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
+          <option value="">Selecciona...</option>
+          <?php foreach ($comerciales as $c): ?>
+            <option value="<?php echo $c['id']; ?>">
+              <?php echo htmlspecialchars($c['nombre']); ?> (<?php echo htmlspecialchars($c['email']); ?>)
+            </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+
       <div>
         <label class="font-semibold text-gray-700">¿Cuántos días dura el evento?</label>
         <select id="num_dias" class="w-full p-3 border border-gray-300 rounded-xl mt-2">
@@ -148,7 +161,6 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
       </div>
       <div id="dias_container" class="space-y-4"></div>
 
-      <!-- Modalidad -->
       <div>
         <label class="font-semibold text-gray-700">Modalidad:</label>
         <select name="modalidad" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
@@ -158,21 +170,9 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         </select>
       </div>
 
-      <!-- Fecha límite -->
       <div>
         <label class="font-semibold text-gray-700">Fecha límite para confirmar asistencia:</label>
         <input type="date" name="fecha_limite" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
-      </div>
-
-      <!-- Selección de Comercial -->
-      <div>
-        <label class="font-semibold text-gray-700">Comercial encargado:</label>
-        <select name="comercial_id" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
-          <option value="">Selecciona un comercial...</option>
-          <?php foreach ($comerciales as $c): ?>
-            <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['nombre']) ?> (<?= htmlspecialchars($c['email']) ?>)</option>
-          <?php endforeach; ?>
-        </select>
       </div>
 
       <div class="text-center">
@@ -189,7 +189,6 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
       var num = parseInt(this.value || 0, 10);
       var container = $('#dias_container');
       container.empty();
-
       for (var i = 1; i <= num; i++) {
         container.append(
           '<div class="p-4 border border-gray-200 rounded-xl">' +
@@ -210,7 +209,6 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
       var input = document.getElementById('urlFormulario');
       var msg   = document.getElementById('mensajeCopiado');
       var texto = input.value;
-
       if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(texto).then(function () {
           msg.classList.remove('hidden');
@@ -219,7 +217,6 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
       } else {
         fallbackCopy();
       }
-
       function fallbackCopy() {
         input.select();
         try {
