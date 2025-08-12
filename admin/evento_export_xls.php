@@ -3,9 +3,8 @@
 require_once __DIR__ . '/_auth.php';
 require_login();
 
-// Conexión a la BD (usa la ruta que corresponda en tu proyecto)
-require_once __DIR__ . '/db/conexion.php';           // ← si tu carpeta es /bd
-// require_once dirname(__DIR__) . '/db/conexion.php'; // ← si es /db
+// ✅ Conexión a la BD: sube un nivel y entra a /db/
+require_once dirname(__DIR__) . '/db/conexion.php';
 
 // Helper de auditoría
 require_once __DIR__ . '/helpers/audit.php';
@@ -16,8 +15,6 @@ if ($id <= 0) { http_response_code(400); echo "Evento inválido"; exit; }
 
 // Registrar exportación (ahora sí tenemos $conn e ID)
 log_activity($conn, 'export_inscritos', 'evento', $id, array('formato' => 'xlsx'));
-
-// ... aquí sigues con la generación del XLSX/CSV y el output
 
 // Nombre del evento
 $evNombre = 'evento';
@@ -62,7 +59,7 @@ echo "\xEF\xBB\xBF";
     th, td { border: 1px solid #ddd; padding: 6px; font-family: Arial, Helvetica, sans-serif; font-size: 12px; }
     th { background: #942934; color: #fff; text-align: left; }
     .head { font-weight: bold; font-size: 14px; }
-    .text { mso-number-format:"\@"; } /* fuerza texto en Excel (no números) */
+    .text { mso-number-format:"\@"; }
     .wrap { mso-wrap: normal; white-space: normal; }
     .center { text-align:center; }
   </style>
