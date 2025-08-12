@@ -26,7 +26,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $rol     = isset($_POST['rol']) ? $_POST['rol'] : 'editor';
         $clave   = limpiar($_POST['clave']);
         $clave2  = limpiar($_POST['clave2']);
+        $firma_path = null;
 
+        // Validaciones básicas
         if ($nombre==='' || $usuario==='' || $email==='' || $clave==='' ) {
             $err = 'Completa todos los campos.';
         } elseif ($clave !== $clave2) {
@@ -34,20 +36,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (!in_array($rol, array('admin','editor'))) {
             $err = 'Rol inválido.';
         } else {
-            // usuario único
-            $chk = $conn->prepare("SELECT id FROM usuarios WHERE usuario=? LIMIT 1");
-            $chk->bind_param('s', $usuario);
-            $chk->execute(); $chk->store_result();
-            if ($chk->num_rows > 0) {
-                $err = 'Ya existe un usuario con ese nombre.';
-            } else {
-                $hash = password_hash($clave, PASSWORD_BCRYPT);
-                $ins  = $conn->prepare("INSERT INTO usuarios (nombre, usuario, email, password_hash, rol, activo) VALUES (?,?,?,?,?,1)");
-                $ins->bind_param('sssss', $nombre, $usuario, $email, $hash, $rol);
-                if ($ins->execute()) { $msg = 'Usuario creado correctamente.'; } else { $err = 'Error al crear: ' . $conn->error; }
-                $ins->close();
+            // Validar y subir firma si se envió
+            if (!empty($_FILES['firma']['name'])) {
+                $allowed = ['image/png','image/jpeg','image/jpg'];
+                if (!in_array($_FILES['firma']['type'], $allowed)) {
+                    $err = 'La firma debe ser una imagen PNG o JPG.';
+                } elseif ($_FILES['firma']['size'] > 2*1024*1024) {
+                    $err = 'La firma no puede superar los 2MB.';
+                } else {
+                    $ext = pathinfo($_FILES['firma']['name'], PATHINFO_EXTENSION);
+                    $new_name = 'firma_' . time() . '_' . rand(1000,9999) . '.' . $ext;
+                    $upload_dir = dirname(__DIR__) . '/uploads/firmas/';
+                    if (!is_dir($upload_dir)) {
+                        mkdir($upload_dir, 0777, true);
+                    }
+                    if (move_uploaded_file($_FILES['firma']['tmp_name'], $upload_dir . $new_name)) {
+                        $firma_path = 'uploads/firmas/' . $new_name;
+                    } else {
+                        $err = 'Error al subir la firma.';
+                    }
+                }
             }
-            $chk->close();
+
+            // usuario único
+            if ($err==='') {
+                $chk = $conn->prepare("SELECT id FROM usuarios WHERE usuario=? LIMIT 1");
+                $chk->bind_param('s', $usuario);
+                $chk->execute(); $chk->store_result();
+                if ($chk->num_rows > 0) {
+                    $err = 'Ya existe un usuario con ese nombre.';
+                } else {
+                    $hash = password_hash($clave, PASSWORD_BCRYPT);
+                    $ins  = $conn->prepare("INSERT INTO usuarios (nombre, usuario, email, password_hash, rol, activo, firma_path) VALUES (?,?,?,?,?,1,?)");
+                    $ins->bind_param('ssssss', $nombre, $usuario, $email, $hash, $rol, $firma_path);
+                    if ($ins->execute()) { 
+                        $msg = 'Usuario creado correctamente.'; 
+                    } else { 
+                        $err = 'Error al crear: ' . $conn->error; 
+                    }
+                    $ins->close();
+                }
+                $chk->close();
+            }
         }
     }
 
@@ -56,9 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id  = (int)$_POST['id'];
         $rol = isset($_POST['rol']) ? $_POST['rol'] : 'editor';
         if ($id>0 && in_array($rol, array('admin','editor'))) {
-            // Impedir que el ultimo admin se quede sin admins
             if ($id == $_SESSION['uid'] && $rol !== 'admin') {
-                // ¿hay otro admin activo?
                 $rs = $conn->query("SELECT COUNT(*) c FROM usuarios WHERE rol='admin' AND activo=1");
                 $row = $rs ? $rs->fetch_assoc() : array('c'=>0);
                 if ((int)$row['c'] <= 1) { $err = 'No puedes quitarte tu rol de administrador (serías el único).'; }
@@ -75,12 +103,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Activar / Desactivar
     if ($accion === 'toggle_activo') {
         $id = (int)$_POST['id'];
-        $act = (int)$_POST['valor']; // 1 ó 0
+        $act = (int)$_POST['valor']; 
         if ($id>0) {
             if ($id == $_SESSION['uid'] && $act == 0) {
                 $err = 'No puedes desactivarte a ti mismo.';
             } else {
-                // si se desactiva un admin, verifica que quede al menos uno activo
                 if ($act==0) {
                     $q = $conn->prepare("SELECT rol FROM usuarios WHERE id=?");
                     $q->bind_param('i', $id); $q->execute(); $q->bind_result($rrol); $q->fetch(); $q->close();
@@ -100,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Resetear contraseña (genera una temporal)
+    // Resetear contraseña
     if ($accion === 'reset_pass') {
         $id = (int)$_POST['id'];
         if ($id>0) {
@@ -120,7 +147,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($id == $_SESSION['uid']) {
                 $err = 'No puedes eliminar tu propio usuario.';
             } else {
-                // si es admin, valida que queden admins
                 $q = $conn->prepare("SELECT rol FROM usuarios WHERE id=?");
                 $q->bind_param('i', $id); $q->execute(); $q->bind_result($rrol); $q->fetch(); $q->close();
                 if ($rrol === 'admin') {
@@ -173,7 +199,7 @@ include __DIR__ . '/_topbar.php';
   <!-- Crear usuario -->
   <div class="bg-white rounded-2xl shadow p-6 border mb-6">
     <h2 class="font-bold text-[#d32f57] mb-3">➕ Crear usuario</h2>
-    <form method="POST" class="grid md:grid-cols-2 gap-4">
+    <form method="POST" enctype="multipart/form-data" class="grid md:grid-cols-2 gap-4">
       <input type="hidden" name="accion" value="crear">
       <input type="text"   name="nombre"  placeholder="Nombre completo" required class="p-3 border border-gray-300 rounded-xl">
       <input type="text"   name="usuario" placeholder="Usuario" required class="p-3 border border-gray-300 rounded-xl">
@@ -185,6 +211,10 @@ include __DIR__ . '/_topbar.php';
       <input type="password" name="clave"  placeholder="Contraseña" required class="p-3 border border-gray-300 rounded-xl">
       <input type="password" name="clave2" placeholder="Repite contraseña" required class="p-3 border border-gray-300 rounded-xl">
       <div class="md:col-span-2">
+        <label class="block mb-2 text-gray-700 font-medium">Firma (PNG/JPG, máx 2MB):</label>
+        <input type="file" name="firma" accept="image/png, image/jpeg" class="p-2 border border-gray-300 rounded-xl w-full">
+      </div>
+      <div class="md:col-span-2">
         <button type="submit" class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold px-5 py-3 rounded-xl transition-all">
           Crear usuario
         </button>
@@ -195,7 +225,6 @@ include __DIR__ . '/_topbar.php';
   <!-- Lista de usuarios -->
   <div class="bg-white rounded-2xl shadow p-6 border">
     <h2 class="font-bold text-[#d32f57] mb-3">Listado</h2>
-
     <div class="overflow-x-auto">
       <table class="min-w-full text-sm">
         <thead>
@@ -245,12 +274,11 @@ include __DIR__ . '/_topbar.php';
               <td class="p-3"><?php echo htmlspecialchars($u['created_at'], ENT_QUOTES, 'UTF-8'); ?></td>
               <td class="p-3">
                 <div class="flex flex-wrap gap-2">
-                  <form method="POST" class="inline" onsubmit="return confirm('¿Resetear contraseña? Se mostrará una temporal en pantalla.');">
+                  <form method="POST" class="inline" onsubmit="return confirm('¿Resetear contraseña?');">
                     <input type="hidden" name="accion" value="reset_pass">
                     <input type="hidden" name="id" value="<?php echo (int)$u['id']; ?>">
                     <button class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg">Reset clave</button>
                   </form>
-
                   <form method="POST" class="inline" onsubmit="return confirm('¿Eliminar usuario?');">
                     <input type="hidden" name="accion" value="eliminar">
                     <input type="hidden" name="id" value="<?php echo (int)$u['id']; ?>">
