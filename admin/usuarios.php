@@ -22,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($accion === 'crear') {
         $nombre  = limpiar($_POST['nombre']);
         $usuario = limpiar($_POST['usuario']);
+        $whatsapp = isset($_POST['whatsapp']) ? preg_replace('/\D+/', '', $_POST['whatsapp']) : null;
         $email   = limpiar($_POST['email']);
         $rol     = isset($_POST['rol']) ? $_POST['rol'] : 'editor';
         $clave   = limpiar($_POST['clave']);
@@ -67,8 +68,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $err = 'Ya existe un usuario con ese nombre.';
                 } else {
                     $hash = password_hash($clave, PASSWORD_BCRYPT);
-                    $ins  = $conn->prepare("INSERT INTO usuarios (nombre, usuario, email, password_hash, rol, activo, firma_path) VALUES (?,?,?,?,?,1,?)");
-                    $ins->bind_param('ssssss', $nombre, $usuario, $email, $hash, $rol, $firma_path);
+                    $ins  = $conn->prepare("INSERT INTO usuarios (nombre, usuario, email, password_hash, rol, activo, firma_path, whatsapp) 
+                                            VALUES (?,?,?,?,?,1,?,?)");
+                    $ins->bind_param('sssssss', $nombre, $usuario, $email, $hash, $rol, $firma_path, $whatsapp);
                     if ($ins->execute()) { 
                         $msg = 'Usuario creado correctamente.'; 
                     } else { 
@@ -204,6 +206,7 @@ include __DIR__ . '/_topbar.php';
       <input type="text"   name="nombre"  placeholder="Nombre completo" required class="p-3 border border-gray-300 rounded-xl">
       <input type="text"   name="usuario" placeholder="Usuario" required class="p-3 border border-gray-300 rounded-xl">
       <input type="email"  name="email"   placeholder="Email" required class="p-3 border border-gray-300 rounded-xl">
+      <input type="text"  name="whatsapp" placeholder="WhatsApp (ej: 573001234567)" class="p-3 border border-gray-300 rounded-xl">
       <select name="rol" class="p-3 border border-gray-300 rounded-xl" required>
         <option value="editor">Editor</option>
         <option value="admin">Administrador</option>
