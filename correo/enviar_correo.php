@@ -11,8 +11,9 @@ class CorreoDenuncia {
      * Envía confirmación de inscripción a un evento (PHPMailer + Composer).
      *
      * @param string $nombre  Nombre del inscrito
-     * @param string $correo  Correo del inscrito (corporativo)
+     * @param string $correo  Correo del inscrito (corporativo o personal)
      * @param array  $data    Datos del evento:
+     *  - (recomendado) evento_id                ← para buscar comercial (whatsapp/firma) si faltan
      *  - nombre_evento
      *  - modalidad (Presencial|Virtual)
      *  - fecha_limite (YYYY-MM-DD)
@@ -24,16 +25,87 @@ class CorreoDenuncia {
      *  - lugar (HTML opcional si es presencial)
      *  - entidad_empresa (para encabezado “Señores”)
      *  - nombre_inscrito  (para encabezado “Señores”)
-     *  - whatsapp_numero  (solo dígitos, ej. 573001234567)
-     *  - firma_url_public (URL pública de imagen de firma)
-     *  - encargado_nombre (texto debajo de firma)
+     *  - whatsapp_numero  (solo dígitos; si no viene, se busca por evento→comercial)
+     *  - firma_file       (ruta ABSOLUTA de imagen para CID)       [opcional]
+     *  - firma_url_public (URL pública de imagen de firma)         [opcional]
+     *  - encargado_nombre (texto debajo de firma; si no viene, se usa nombre del comercial)
      * @return bool true si envía, false si falla
      */
     public function sendConfirmacionInscripcion($nombre, $correo, array $data) {
         $mail = new PHPMailer(true);
 
+        // ====== OPCIONAL: completar desde BD (evento → comercial) si faltan datos ======
+        // Si NO te pasan whatsapp/firma/encargado, intentamos obtenerlos con evento_id
+        $comWaDb = null;       // whatsapp del comercial (solo dígitos)
+        $comFirmaPath = null;  // ruta relativa tipo "uploads/firmas/xxx.png"
+        $comNombre = null;     // nombre comercial
+        if (
+            (!isset($data['whatsapp_numero']) || empty($data['whatsapp_numero']))
+            || (empty($data['firma_file']) && empty($data['firma_url_public']))
+            || (empty($data['encargado_nombre']))
+        ) {
+            if (!empty($data['evento_id'])) {
+                // Conexión y helper de URL para armar firma pública si hace falta
+                $conn = null;
+                $baseUrlFn = null;
+                // Conexión
+                $tryConn = @require_once dirname(__DIR__) . '/db/conexion.php';
+                if (isset($conn) && $conn instanceof mysqli) {
+                    // Cargar comercial del evento
+                    $sql = "SELECT u.nombre, u.whatsapp, u.firma_path
+                            FROM eventos e
+                            LEFT JOIN usuarios u ON u.id = e.comercial_user_id
+                            WHERE e.id = ? LIMIT 1";
+                    if ($st = $conn->prepare($sql)) {
+                        $st->bind_param('i', $data['evento_id']);
+                        if ($st->execute()) {
+                            $st->bind_result($rNom, $rWa, $rFirma);
+                            if ($st->fetch()) {
+                                $comNombre   = $rNom ?: null;
+                                $comWaDb     = $rWa ? preg_replace('/\D+/', '', $rWa) : null;
+                                $comFirmaPath= $rFirma ?: null; // p.ej. "uploads/firmas/firma_123.png"
+                            }
+                        }
+                        $st->close();
+                    }
+                }
+                // Intentar función base_url si existe
+                if (is_file(dirname(__DIR__) . '/config/url.php')) {
+                    @require_once dirname(__DIR__) . '/config/url.php';
+                    if (function_exists('base_url')) {
+                        $baseUrlFn = 'base_url';
+                    }
+                }
+
+                // Completar whatsapp si faltaba
+                if (empty($data['whatsapp_numero']) && !empty($comWaDb)) {
+                    $data['whatsapp_numero'] = $comWaDb;
+                }
+
+                // Completar nombre encargado si faltaba
+                if (empty($data['encargado_nombre']) && !empty($comNombre)) {
+                    $data['encargado_nombre'] = $comNombre;
+                }
+
+                // Completar firma si faltaba
+                if (empty($data['firma_file']) && empty($data['firma_url_public']) && !empty($comFirmaPath)) {
+                    // Ruta absoluta del archivo (si existe en el servidor)
+                    $abs = dirname(__DIR__) . '/' . ltrim($comFirmaPath, '/');
+                    if (is_file($abs)) {
+                        $data['firma_file'] = $abs; // preferimos embebida por CID
+                    } else {
+                        // Como fallback, intentamos construir URL pública si tenemos base_url()
+                        if ($baseUrlFn) {
+                            $data['firma_url_public'] = call_user_func($baseUrlFn, $comFirmaPath);
+                        }
+                    }
+                }
+            }
+        }
+        // ====== FIN de completar desde BD ======
+
         try {
-            // ====== SMTP (según tu proyecto) ======
+            // ====== SMTP (ajústalo a tu servidor) ======
             $mail->SMTPDebug   = 0;
             $mail->Debugoutput = 'html';
             $mail->isSMTP();
@@ -63,14 +135,13 @@ class CorreoDenuncia {
             $mail->Encoding = 'base64';
             $mail->setFrom($fromEmail, $fromName);
             $mail->addAddress($correo, $nombre);
-            $mail->addReplyTo($fromEmail, $fromName); // por si responden
+            $mail->addReplyTo($fromEmail, $fromName);
 
             // ====== Embebidos / Adjuntos ======
             // Imagen del evento embebida (si existe)
             $cidImg = null;
             if (!empty($data['url_imagen']) && is_file($data['url_imagen'])) {
                 $cidImg = 'evento_' . md5($data['url_imagen']);
-                // El segundo parámetro es el CID para usar en <img src="cid:...">
                 $mail->addEmbeddedImage($data['url_imagen'], $cidImg);
             }
 
@@ -128,39 +199,45 @@ class CorreoDenuncia {
                 $encabezado .= "</p>";
             }
 
-            // Botón de WhatsApp
+            // ====== Botón de WhatsApp (usa comercial del evento por defecto) ======
+            // Prioridad: $data['whatsapp_numero'] → si no, lo que miramos en BD arriba
             $btnWhatsapp = '';
-            if (!empty($data['whatsapp_numero'])) {
-                $wa = preg_replace('/\D/', '', $data['whatsapp_numero']);
+            $waNum = !empty($data['whatsapp_numero']) ? preg_replace('/\D/', '', $data['whatsapp_numero']) : '';
+            if (empty($waNum) && !empty($comWaDb)) {
+                $waNum = $comWaDb;
+            }
+            if (!empty($waNum)) {
                 $txt = rawurlencode('Hola, tengo una consulta sobre el evento ' . (isset($data['nombre_evento']) ? $data['nombre_evento'] : ''));
                 $btnWhatsapp = '<p style="margin:16px 0 0">
-                    <a href="https://wa.me/'.$wa.'?text='.$txt.'" target="_blank"
+                    <a href="https://wa.me/'.$waNum.'?text='.$txt.'" target="_blank"
                        style="display:inline-block;background:#25D366;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">
-                      📱 Contactar por WhatsApp
+                      💬 Escribir por WhatsApp
                     </a>
                   </p>';
             }
 
-            // Firma (solo imagen) — preferir embebida por CID
+            // ====== Firma (preferir embebida por CID; si no, URL pública) ======
             $firmaHtml   = '';
             $firmaImgTag = '';
+            $encargadoNombre = !empty($data['encargado_nombre']) ? $data['encargado_nombre'] : ($comNombre ?: '');
 
             if (!empty($data['firma_file']) && is_file($data['firma_file'])) {
                 $cidFirma = 'firma_' . md5($data['firma_file']);
-                // Detecta mime si está disponible (sino usa image/png)
                 $mime = function_exists('mime_content_type') ? mime_content_type($data['firma_file']) : 'image/png';
                 $mail->addEmbeddedImage($data['firma_file'], $cidFirma, basename($data['firma_file']), 'base64', $mime);
                 $firmaImgTag = "<img src='cid:{$cidFirma}' alt='Firma' style='width:300px; height:auto; display:block; margin:10px auto 0;'>";
             } elseif (!empty($data['firma_url_public'])) {
-                // Fallback a URL pública (por si acaso)
                 $firmaImgTag = '<img src="'.htmlspecialchars($data['firma_url_public'], ENT_QUOTES, 'UTF-8').'" alt="Firma" style="width:300px; height:auto; display:block; margin:10px auto 0;">';
             }
 
-            if ($firmaImgTag) {
-                $firmaHtml = '<div style="margin-top:18px; text-align:center;">' . $firmaImgTag . '</div>';
+            if ($firmaImgTag || $encargadoNombre) {
+                $firmaHtml = '<div style="margin-top:18px; text-align:center;">'
+                           . ($encargadoNombre ? '<div style="font-weight:bold;margin-bottom:6px;">'.htmlspecialchars($encargadoNombre, ENT_QUOTES, 'UTF-8').'</div>' : '')
+                           . $firmaImgTag
+                           . '</div>';
             }
 
-            // HTML final
+            // ====== HTML final ======
             $html = "
             <div style='font-family:Arial, Helvetica, sans-serif;background:#f6f7fb;padding:24px'>
               <div style='max-width:700px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden'>
@@ -185,9 +262,9 @@ class CorreoDenuncia {
 
                   <p style='margin:14px 0 8px'><strong>🔹 Tenga en cuenta:</strong></p>
                   <ul style='margin:8px 0 18px; padding-left:18px; color:#333'>
-                    <li>Para garantizar su reserva, por favor envíe con anticipación el soporte de pago o autorización correspondiente.</li>"
-                    .(!empty($fechaLimiteTxt) ? "<li>Confirme su asistencia antes del <strong>{$fechaLimiteTxt}</strong>.</li>" : "")."
-                    <li>Un día antes del evento recibirá el cronograma detallado.</li>
+                    <li>Para garantizar su reserva, por favor envíe con anticipación el soporte de pago o autorización correspondiente.</li>".
+                    (!empty($fechaLimiteTxt) ? "<li>Confirme su asistencia antes del <strong>{$fechaLimiteTxt}</strong>.</li>" : "").
+                   "<li>Un día antes del evento recibirá el cronograma detallado.</li>
                   </ul>
 
                   {$btnWhatsapp}
@@ -212,7 +289,6 @@ class CorreoDenuncia {
             return $mail->send();
 
         } catch (Exception $e) {
-            // Loguea el error exacto del servidor SMTP/PHPMailer
             error_log('No se pudo enviar correo: ' . $mail->ErrorInfo);
             return false;
         }

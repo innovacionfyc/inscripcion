@@ -14,7 +14,7 @@ function generarSlug($texto) {
 
 // 📌 Cargar usuarios comerciales desde la BD
 $comerciales = [];
-$sqlUsuarios = "SELECT id, nombre, email FROM usuarios WHERE activo = 1 ORDER BY nombre ASC";
+$sqlUsuarios = "SELECT id, nombre, email, whatsapp FROM usuarios WHERE activo = 1 ORDER BY nombre ASC";
 $resUsuarios = $conn->query($sqlUsuarios);
 if ($resUsuarios && $resUsuarios->num_rows > 0) {
     while ($row = $resUsuarios->fetch_assoc()) {
