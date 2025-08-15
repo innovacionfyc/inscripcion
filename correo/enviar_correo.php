@@ -85,13 +85,24 @@ class CorreoDenuncia {
                     $data['encargado_nombre'] = $comNombre;
                 }
 
-                // Completar firma si faltaba
+                // Completar firma si faltaba (más robusto con DOCUMENT_ROOT y normalización)
                 if (empty($data['firma_file']) && empty($data['firma_url_public']) && !empty($comFirmaPath)) {
-                    $abs = dirname(__DIR__) . '/' . ltrim($comFirmaPath, '/');
+                    $p = trim($comFirmaPath);
+
+                    // Si viene solo el nombre ("mi_firma.png"), prepender carpeta por defecto
+                    if (strpos($p, 'uploads/firmas/') === false && strpos($p, '/uploads/firmas/') === false) {
+                        $p = 'uploads/firmas/' . ltrim($p, '/');
+                    }
+
+                    // Construir ruta absoluta segura en Plesk
+                    $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? rtrim($_SERVER['DOCUMENT_ROOT'], '/') : rtrim(dirname(__DIR__), '/');
+                    $abs     = $docRoot . '/' . ltrim($p, '/');
+
                     if (is_file($abs)) {
-                        $data['firma_file'] = $abs; // preferimos embebida por CID
+                        $data['firma_file'] = $abs; // embebido (CID)
                     } elseif ($baseUrlFn) {
-                        $data['firma_url_public'] = call_user_func($baseUrlFn, $comFirmaPath);
+                        // URL pública como plan B
+                        $data['firma_url_public'] = call_user_func($baseUrlFn, $p);
                     }
                 }
             }
