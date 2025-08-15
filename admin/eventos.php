@@ -7,7 +7,6 @@ $back_to = 'dashboard.php';
 $show_back = true;
 include __DIR__ . '/_topbar.php';
 
-// Traer eventos (contando inscritos)
 // Traer eventos (contando inscritos + datos del comercial)
 $sql = "SELECT
           e.id,
@@ -23,6 +22,10 @@ $sql = "SELECT
         LEFT JOIN usuarios u ON u.id = e.comercial_user_id
         ORDER BY e.id DESC";
 $rs = $conn->query($sql);
+
+// (opcional, útil en Plesk si algo falla)
+if (!$rs) { error_log('[eventos.php] SQL error: ' . $conn->error); }
+
 $eventos = array();
 if ($rs) {
   while ($row = $rs->fetch_assoc()) { $eventos[] = $row; }
@@ -49,7 +52,7 @@ $conn->close();
       </div>
     <?php else: ?>
       <div class="grid gap-4">
-        <?php foreach ($eventos as $ev): 
+        <?php foreach ($eventos as $ev):
           $formUrl = base_url('registro.php?e=' . urlencode($ev['slug'])); ?>
           <div class="bg-white rounded-2xl shadow p-4 border flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div class="flex items-center gap-4">
@@ -61,17 +64,20 @@ $conn->close();
                   Límite: <?php echo htmlspecialchars($ev['fecha_limite']); ?> •
                   Inscritos: <span class="font-semibold"><?php echo (int)$ev['total_inscritos']; ?></span>
                 </div>
+
+                <!-- 🔧 Cambiado $row -> $ev -->
                 <p class="text-sm text-gray-600">
                   Asignado a:
                   <span class="font-semibold">
-                    <?php echo htmlspecialchars($row['comercial_nombre'] ?: '—', ENT_QUOTES, 'UTF-8'); ?>
+                    <?php echo htmlspecialchars($ev['comercial_nombre'] ?: '—', ENT_QUOTES, 'UTF-8'); ?>
                   </span>
-                  <?php if (!empty($row['comercial_email'])): ?>
+                  <?php if (!empty($ev['comercial_email'])): ?>
                     <span class="text-gray-500">
-                      (<?php echo htmlspecialchars($row['comercial_email'], ENT_QUOTES, 'UTF-8'); ?>)
+                      (<?php echo htmlspecialchars($ev['comercial_email'], ENT_QUOTES, 'UTF-8'); ?>)
                     </span>
                   <?php endif; ?>
                 </p>
+
                 <div class="text-xs text-gray-500 break-all mt-1">
                   <?php echo htmlspecialchars($formUrl); ?>
                 </div>
@@ -91,8 +97,9 @@ $conn->close();
                  class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-sm">
                 ⬇️ Exportar inscritos (Excel)
               </a>
-              <!-- Ver Inscritos -->
-              <a href="inscritos.php?evento_id=<?php echo (int)$row['id']; ?>"
+
+              <!-- 🔧 Cambiado $row -> $ev -->
+              <a href="inscritos.php?evento_id=<?php echo (int)$ev['id']; ?>"
                  class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl transition-all">
                 👥 Ver inscritos
               </a>
