@@ -35,18 +35,19 @@ class CorreoDenuncia {
         $mail = new PHPMailer(true);
 
                 // ====== OPCIONAL: completar desde BD (evento → comercial) si faltan datos ======
+                // ====== OPCIONAL: completar desde BD (evento → comercial) si faltan datos ======
                 $comWaDb = null;       // whatsapp del comercial (solo dígitos)
-                $comFirmaPath = null;  // ruta relativa tipo "uploads/firmas/xxx.png" o solo "xxx.png"
+                $comFirmaPath = null;  // "uploads/firmas/xxx.png" o solo "xxx.png"
                 $comNombre = null;     // nombre comercial
 
                 if (
-                    (!isset($data['whatsapp_numero']) || empty($data['whatsapp_numero']))
+                    (!isset($data['whatsapp_numero']) || $data['whatsapp_numero'] === '')
                     || (empty($data['firma_file']) && empty($data['firma_url_public']))
                     || (empty($data['encargado_nombre']))
                 ) {
                     if (!empty($data['evento_id'])) {
 
-                        // Asegurar $conn aunque conexion.php ya haya sido incluido antes
+                        // Asegurar $conn aunque conexion.php ya se haya incluido en otro archivo
                         if (!isset($conn) || !($conn instanceof mysqli)) {
                             if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof mysqli) {
                                 $conn = $GLOBALS['conn'];
@@ -58,19 +59,20 @@ class CorreoDenuncia {
                             }
                         }
 
-                        if (isset($conn) && $conn instanceof mysqli) {
+                        if (isset($conn) && $conn instanceof mysqli)) {
                             $sql = "SELECT u.nombre, u.whatsapp, u.firma_path
                                     FROM eventos e
                                     LEFT JOIN usuarios u ON u.id = e.comercial_user_id
                                     WHERE e.id = ? LIMIT 1";
                             if ($st = $conn->prepare($sql)) {
-                                $st->bind_param('i', $data['evento_id']);
+                                $eid = (int)$data['evento_id'];
+                                $st->bind_param('i', $eid);
                                 if ($st->execute()) {
                                     $st->bind_result($rNom, $rWa, $rFirma);
                                     if ($st->fetch()) {
                                         $comNombre    = $rNom ? $rNom : null;
                                         $comWaDb      = $rWa ? preg_replace('/\D+/', '', $rWa) : null;
-                                        $comFirmaPath = $rFirma ? $rFirma : null; // p.ej. "uploads/firmas/firma_123.png" o "firma_123.png"
+                                        $comFirmaPath = $rFirma ? $rFirma : null;
                                     }
                                 }
                                 $st->close();
@@ -81,31 +83,27 @@ class CorreoDenuncia {
                         $baseUrlFn = null;
                         if (is_file(dirname(__DIR__) . '/config/url.php')) {
                             @require_once dirname(__DIR__) . '/config/url.php';
-                            if (function_exists('base_url')) {
-                                $baseUrlFn = 'base_url';
-                            }
+                            if (function_exists('base_url')) { $baseUrlFn = 'base_url'; }
                         }
 
-                        // Completar whatsapp si faltaba
+                        // Completar whatsapp/encargado si faltan
                         if (empty($data['whatsapp_numero']) && !empty($comWaDb)) {
                             $data['whatsapp_numero'] = $comWaDb;
                         }
-
-                        // Completar encargado si faltaba
                         if (empty($data['encargado_nombre']) && !empty($comNombre)) {
                             $data['encargado_nombre'] = $comNombre;
                         }
 
-                        // Completar firma si faltaba (intenta embebido local; si no, URL pública)
+                        // Completar firma: intentar embebido local (CID); si no, URL pública
                         if (empty($data['firma_file']) && empty($data['firma_url_public']) && !empty($comFirmaPath)) {
                             $p = trim($comFirmaPath);
 
-                            // Si viene solo el nombre, anteponer carpeta por defecto
+                            // Si viene solo el nombre, anteponer la carpeta por defecto
                             if (strpos($p, 'uploads/firmas/') === false && strpos($p, '/uploads/firmas/') === false) {
                                 $p = 'uploads/firmas/' . ltrim($p, '/');
                             }
 
-                            // Ruta absoluta correcta en Plesk / PHP antiguos
+                            // Ruta absoluta correcta en Plesk
                             $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? rtrim($_SERVER['DOCUMENT_ROOT'], '/') : rtrim(dirname(__DIR__), '/');
                             $abs     = $docRoot . '/' . ltrim($p, '/');
 
@@ -115,8 +113,8 @@ class CorreoDenuncia {
                                 $data['firma_url_public'] = call_user_func($baseUrlFn, $p);
                             }
                         }
-                    }
-                }
+                    } // <-- cierra if (!empty($data['evento_id']))
+                } // <-- cierra if (faltan datos)
                 // ====== FIN completar desde BD ======
 
                 // base_url() si está disponible
