@@ -393,7 +393,7 @@ class CorreoDenuncia {
                     (!empty($data['medio']) ? "<p style='margin:0 0 8px'><strong>Medio por el que se enteró:</strong> ".htmlspecialchars($data['medio'], ENT_QUOTES, 'UTF-8')."</p>" : "").
                   "</div>
 
-                  ".($hayAdjunto ? "<p style='margin:10px 0 0; color:#0a7'>📎 Se adjuntó el soporte de pago.</p>" : "<p style='margin:10px 0 0; color:#a70'>⚠️ El inscrito no adjuntó soporte.</p>")."
+                  ".($hayAdjunto ? "<p style='margin:10px 0 0; color:#0a7'>📎 Se adjuntó el Soporte de Asistencia.</p>" : "<p style='margin:10px 0 0; color:#a70'>⚠️ El inscrito no adjuntó soporte.</p>")."
 
                   <p style='margin:10px 0 0; font-size:12px; color:#666'>Recibido: {$now}</p>
                 </div>

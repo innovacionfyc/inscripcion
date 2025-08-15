@@ -129,7 +129,7 @@ $stmt->close();
             <th class="py-2 pr-3">Celular</th>
             <th class="py-2 pr-3">Email</th>
             <th class="py-2 pr-3">Tipo</th>
-            <th class="py-2 pr-3">Soporte de pago</th>
+            <th class="py-2 pr-3">Soporte de Asistencia</th>
             <th class="py-2 pr-3">Acciones</th>
           </tr>
         </thead>

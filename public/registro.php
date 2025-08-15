@@ -349,7 +349,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <input type="file" name="soporte_pago" accept=".pdf,image/*"
           class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500"
         />
-        <p class="text-sm text-gray-500 -mt-2">Opcional. PDF o imagen (máx. 10 MB).</p>
+        <p class="text-sm text-gray-500 -mt-2">Soporte de Asistencia Opcional (PDF o imagen - máx. 10 MB).</p>
         <input type="text" name="medio" placeholder="¿Por qué medio se enteró?" class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
 
         <button type="submit" class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 px-6 rounded-xl w-full transition-all duration-300 hover:scale-[1.01] active:scale-[0.98]">
