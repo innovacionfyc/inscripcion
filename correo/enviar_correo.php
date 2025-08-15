@@ -13,144 +13,93 @@ class CorreoDenuncia {
      * @param string $nombre  Nombre del inscrito
      * @param string $correo  Correo del inscrito (corporativo o personal)
      * @param array  $data    Datos del evento:
-     *  - (recomendado) evento_id                ← para buscar comercial (whatsapp/firma) si faltan
-     *  - nombre_evento
-     *  - modalidad (Presencial|Virtual)
-     *  - fecha_limite (YYYY-MM-DD)
-     *  - resumen_fechas (ej. "4, 5 y 6 de septiembre de 2025")
-     *  - detalle_horario (HTML)
-     *  - url_imagen (ruta ABSOLUTA en el servidor para incrustar)  [opcional]
-     *  - url_imagen_public (URL pública opcional)
-     *  - adjunto_pdf (ruta ABSOLUTA del PDF a adjuntar)            [opcional]
-     *  - lugar (HTML opcional si es presencial)
-     *  - entidad_empresa (para encabezado “Señores”)
-     *  - nombre_inscrito  (para encabezado “Señores”)
-     *  - whatsapp_numero  (solo dígitos; si no viene, se busca por evento→comercial)
-     *  - firma_file       (ruta ABSOLUTA de imagen para CID)       [opcional]
-     *  - firma_url_public (URL pública de imagen de firma)         [opcional]
-     *  - encargado_nombre (texto debajo de firma; si no viene, se usa nombre del comercial)
-     * @return bool true si envía, false si falla
+     *  - (recomendado) evento_id
+     *  - nombre_evento, modalidad, fecha_limite, resumen_fechas, detalle_horario
+     *  - url_imagen (ruta ABS), url_imagen_public (opcional)
+     *  - adjunto_pdf (ruta ABS opcional)
+     *  - lugar, entidad_empresa, nombre_inscrito
+     *  - whatsapp_numero (solo dígitos)
+     *  - firma_file (ruta ABS) o firma_url_public (URL)
+     *  - encargado_nombre
+     * @return bool
      */
     public function sendConfirmacionInscripcion($nombre, $correo, array $data) {
         $mail = new PHPMailer(true);
 
-                // ====== OPCIONAL: completar desde BD (evento → comercial) si faltan datos ======
-                // ====== OPCIONAL: completar desde BD (evento → comercial) si faltan datos ======
-                $comWaDb = null;       // whatsapp del comercial (solo dígitos)
-                $comFirmaPath = null;  // "uploads/firmas/xxx.png" o solo "xxx.png"
-                $comNombre = null;     // nombre comercial
+        // ====== OPCIONAL: completar desde BD (evento → comercial) si faltan datos ======
+        $comWaDb = null;       // whatsapp del comercial (solo dígitos)
+        $comFirmaPath = null;  // "uploads/firmas/xxx.png" o solo "xxx.png"
+        $comNombre = null;     // nombre comercial
 
-                if (
-                    (!isset($data['whatsapp_numero']) || $data['whatsapp_numero'] === '')
-                    || (empty($data['firma_file']) && empty($data['firma_url_public']))
-                    || (empty($data['encargado_nombre']))
-                ) {
-                    if (!empty($data['evento_id'])) {
+        if (
+            (!isset($data['whatsapp_numero']) || $data['whatsapp_numero'] === '')
+            || (empty($data['firma_file']) && empty($data['firma_url_public']))
+            || (empty($data['encargado_nombre']))
+        ) {
+            if (!empty($data['evento_id'])) {
+                // Asegurar $conn aunque conexion.php ya se haya incluido en otro archivo
+                if (!isset($conn) || !($conn instanceof mysqli)) {
+                    if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof mysqli) {
+                        $conn = $GLOBALS['conn'];
+                    } else {
+                        @require_once dirname(__DIR__) . '/db/conexion.php';
+                        if ((!isset($conn) || !($conn instanceof mysqli)) && isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof mysqli) {
+                            $conn = $GLOBALS['conn'];
+                        }
+                    }
+                }
 
-                        // Asegurar $conn aunque conexion.php ya se haya incluido en otro archivo
-                        if (!isset($conn) || !($conn instanceof mysqli)) {
-                            if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof mysqli) {
-                                $conn = $GLOBALS['conn'];
-                            } else {
-                                @require_once dirname(__DIR__) . '/db/conexion.php';
-                                if ((!isset($conn) || !($conn instanceof mysqli)) && isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof mysqli) {
-                                    $conn = $GLOBALS['conn'];
-                                }
+                if (isset($conn) && $conn instanceof mysqli) {
+                    $sql = "SELECT u.nombre, u.whatsapp, u.firma_path
+                            FROM eventos e
+                            LEFT JOIN usuarios u ON u.id = e.comercial_user_id
+                            WHERE e.id = ? LIMIT 1";
+                    if ($st = $conn->prepare($sql)) {
+                        $eid = (int)$data['evento_id'];
+                        $st->bind_param('i', $eid);
+                        if ($st->execute()) {
+                            $st->bind_result($rNom, $rWa, $rFirma);
+                            if ($st->fetch()) {
+                                $comNombre    = $rNom ? $rNom : null;
+                                $comWaDb      = $rWa ? preg_replace('/\D+/', '', $rWa) : null;
+                                $comFirmaPath = $rFirma ? $rFirma : null;
                             }
                         }
-
-                        if (isset($conn) && $conn instanceof mysqli)) {
-                            $sql = "SELECT u.nombre, u.whatsapp, u.firma_path
-                                    FROM eventos e
-                                    LEFT JOIN usuarios u ON u.id = e.comercial_user_id
-                                    WHERE e.id = ? LIMIT 1";
-                            if ($st = $conn->prepare($sql)) {
-                                $eid = (int)$data['evento_id'];
-                                $st->bind_param('i', $eid);
-                                if ($st->execute()) {
-                                    $st->bind_result($rNom, $rWa, $rFirma);
-                                    if ($st->fetch()) {
-                                        $comNombre    = $rNom ? $rNom : null;
-                                        $comWaDb      = $rWa ? preg_replace('/\D+/', '', $rWa) : null;
-                                        $comFirmaPath = $rFirma ? $rFirma : null;
-                                    }
-                                }
-                                $st->close();
-                            }
-                        }
-
-                        // base_url() si está disponible
-                        $baseUrlFn = null;
-                        if (is_file(dirname(__DIR__) . '/config/url.php')) {
-                            @require_once dirname(__DIR__) . '/config/url.php';
-                            if (function_exists('base_url')) { $baseUrlFn = 'base_url'; }
-                        }
-
-                        // Completar whatsapp/encargado si faltan
-                        if (empty($data['whatsapp_numero']) && !empty($comWaDb)) {
-                            $data['whatsapp_numero'] = $comWaDb;
-                        }
-                        if (empty($data['encargado_nombre']) && !empty($comNombre)) {
-                            $data['encargado_nombre'] = $comNombre;
-                        }
-
-                        // Completar firma: intentar embebido local (CID); si no, URL pública
-                        if (empty($data['firma_file']) && empty($data['firma_url_public']) && !empty($comFirmaPath)) {
-                            $p = trim($comFirmaPath);
-
-                            // Si viene solo el nombre, anteponer la carpeta por defecto
-                            if (strpos($p, 'uploads/firmas/') === false && strpos($p, '/uploads/firmas/') === false) {
-                                $p = 'uploads/firmas/' . ltrim($p, '/');
-                            }
-
-                            // Ruta absoluta correcta en Plesk
-                            $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? rtrim($_SERVER['DOCUMENT_ROOT'], '/') : rtrim(dirname(__DIR__), '/');
-                            $abs     = $docRoot . '/' . ltrim($p, '/');
-
-                            if (is_file($abs)) {
-                                $data['firma_file'] = $abs; // usar CID (embebido)
-                            } elseif ($baseUrlFn) {
-                                $data['firma_url_public'] = call_user_func($baseUrlFn, $p);
-                            }
-                        }
-                    } // <-- cierra if (!empty($data['evento_id']))
-                } // <-- cierra if (faltan datos)
-                // ====== FIN completar desde BD ======
+                        $st->close();
+                    }
+                }
 
                 // base_url() si está disponible
                 $baseUrlFn = null;
                 if (is_file(dirname(__DIR__) . '/config/url.php')) {
                     @require_once dirname(__DIR__) . '/config/url.php';
-                    if (function_exists('base_url')) $baseUrlFn = 'base_url';
+                    if (function_exists('base_url')) { $baseUrlFn = 'base_url'; }
                 }
 
-                // Completar whatsapp si faltaba
+                // Completar whatsapp/encargado si faltan
                 if (empty($data['whatsapp_numero']) && !empty($comWaDb)) {
                     $data['whatsapp_numero'] = $comWaDb;
                 }
-
-                // Completar encargado si faltaba
                 if (empty($data['encargado_nombre']) && !empty($comNombre)) {
                     $data['encargado_nombre'] = $comNombre;
                 }
 
-                // Completar firma si faltaba (más robusto con DOCUMENT_ROOT y normalización)
+                // Completar firma: intentar embebido local (CID); si no, URL pública
                 if (empty($data['firma_file']) && empty($data['firma_url_public']) && !empty($comFirmaPath)) {
                     $p = trim($comFirmaPath);
 
-                    // Si viene solo el nombre ("mi_firma.png"), prepender carpeta por defecto
+                    // Si viene solo el nombre, anteponer la carpeta por defecto
                     if (strpos($p, 'uploads/firmas/') === false && strpos($p, '/uploads/firmas/') === false) {
                         $p = 'uploads/firmas/' . ltrim($p, '/');
                     }
 
-                    // Construir ruta absoluta segura en Plesk
+                    // Ruta absoluta correcta en Plesk
                     $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? rtrim($_SERVER['DOCUMENT_ROOT'], '/') : rtrim(dirname(__DIR__), '/');
                     $abs     = $docRoot . '/' . ltrim($p, '/');
 
                     if (is_file($abs)) {
-                        $data['firma_file'] = $abs; // embebido (CID)
+                        $data['firma_file'] = $abs; // usar CID (embebido)
                     } elseif ($baseUrlFn) {
-                        // URL pública como plan B
                         $data['firma_url_public'] = call_user_func($baseUrlFn, $p);
                     }
                 }
@@ -159,14 +108,14 @@ class CorreoDenuncia {
         // ====== FIN completar desde BD ======
 
         try {
-            // ====== SMTP (ajústalo a tu servidor) ======
+            // ====== SMTP (tus valores actuales) ======
             $mail->SMTPDebug   = 0;
             $mail->Debugoutput = 'html';
             $mail->isSMTP();
             $mail->Host       = 'smtp-relay.gmail.com';
             $mail->Port       = 25;              // sin TLS explícito
             $mail->SMTPAuth   = true;
-            $mail->SMTPSecure = false;           // importante para smtp-relay.gmail.com:25
+            $mail->SMTPSecure = false;
             $mail->SMTPOptions = array(
                 'ssl' => array(
                     'verify_peer'       => false,
@@ -175,7 +124,7 @@ class CorreoDenuncia {
                 )
             );
 
-            // Credenciales / remitente (dejas tus valores actuales)
+            // Credenciales / remitente
             $smtpUser   = 'it@fycconsultores.com';
             $smtpPass   = 'ecym cwbl dfkg maea'; // APP PASSWORD
             $fromEmail  = 'certificados@fycconsultores.com';
@@ -199,7 +148,7 @@ class CorreoDenuncia {
                 $mail->addEmbeddedImage($data['url_imagen'], $cidImg);
             }
 
-            // PDF adjunto (si existe). En tu flujo solo viene para presencial.
+            // PDF adjunto (si existe)
             if (!empty($data['adjunto_pdf'])) {
                 if (!file_exists($data['adjunto_pdf'])) {
                     error_log("PDF no encontrado: " . $data['adjunto_pdf']);
@@ -234,7 +183,7 @@ class CorreoDenuncia {
             $fechaLimiteTxt = '';
             if (!empty($fechaLimite)) {
                 $ts = strtotime($fechaLimite);
-                if ($ts !== false) $fechaLimiteTxt = date('d/m/Y', $ts);
+                if ($ts !== false) { $fechaLimiteTxt = date('d/m/Y', $ts); }
             }
 
             // Encabezado “Señores: (Entidad) (Nombre)”
@@ -253,7 +202,7 @@ class CorreoDenuncia {
             // Botón de WhatsApp
             $btnWhatsapp = '';
             $waNum = !empty($data['whatsapp_numero']) ? preg_replace('/\D/', '', $data['whatsapp_numero']) : '';
-            if (empty($waNum) && !empty($comWaDb)) $waNum = $comWaDb;
+            if (empty($waNum) && !empty($comWaDb)) { $waNum = $comWaDb; }
 
             if (!empty($waNum)) {
                 $txt = rawurlencode('Hola, tengo una consulta sobre el evento ' . ($data['nombre_evento'] ?? ''));
@@ -334,7 +283,7 @@ class CorreoDenuncia {
 
             $mail->MsgHTML($html);
 
-            // AltBody robusto (sin nulls)
+            // AltBody robusto
             $altNombreEvento = $data['nombre_evento'] ?? '';
             $altModalidad    = $data['modalidad'] ?? '';
             $altResumen      = strip_tags($resumenFechas);
