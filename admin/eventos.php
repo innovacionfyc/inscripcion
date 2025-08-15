@@ -8,9 +8,19 @@ $show_back = true;
 include __DIR__ . '/_topbar.php';
 
 // Traer eventos (contando inscritos)
-$sql = "SELECT e.id, e.nombre, e.slug, e.modalidad, e.fecha_limite, e.imagen,
-               (SELECT COUNT(1) FROM inscritos i WHERE i.evento_id = e.id) AS total_inscritos
+// Traer eventos (contando inscritos + datos del comercial)
+$sql = "SELECT
+          e.id,
+          e.nombre,
+          e.slug,
+          e.modalidad,
+          e.fecha_limite,
+          e.imagen,
+          (SELECT COUNT(1) FROM inscritos i WHERE i.evento_id = e.id) AS total_inscritos,
+          u.nombre AS comercial_nombre,
+          u.email  AS comercial_email
         FROM eventos e
+        LEFT JOIN usuarios u ON u.id = e.comercial_user_id
         ORDER BY e.id DESC";
 $rs = $conn->query($sql);
 $eventos = array();
@@ -51,6 +61,17 @@ $conn->close();
                   Límite: <?php echo htmlspecialchars($ev['fecha_limite']); ?> •
                   Inscritos: <span class="font-semibold"><?php echo (int)$ev['total_inscritos']; ?></span>
                 </div>
+                <p class="text-sm text-gray-600">
+                  Asignado a:
+                  <span class="font-semibold">
+                    <?php echo htmlspecialchars($row['comercial_nombre'] ?: '—', ENT_QUOTES, 'UTF-8'); ?>
+                  </span>
+                  <?php if (!empty($row['comercial_email'])): ?>
+                    <span class="text-gray-500">
+                      (<?php echo htmlspecialchars($row['comercial_email'], ENT_QUOTES, 'UTF-8'); ?>)
+                    </span>
+                  <?php endif; ?>
+                </p>
                 <div class="text-xs text-gray-500 break-all mt-1">
                   <?php echo htmlspecialchars($formUrl); ?>
                 </div>
@@ -69,6 +90,11 @@ $conn->close();
               <a href="evento_export_xls.php?id=<?php echo (int)$ev['id']; ?>"
                  class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-sm">
                 ⬇️ Exportar inscritos (Excel)
+              </a>
+              <!-- Ver Inscritos -->
+              <a href="inscritos.php?evento_id=<?php echo (int)$row['id']; ?>"
+                 class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl transition-all">
+                👥 Ver inscritos
               </a>
 
               <!-- Eliminar (solo admin) -->
