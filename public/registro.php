@@ -197,6 +197,54 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $correo = new CorreoDenuncia();
         $correo->sendConfirmacionInscripcion($nombre, $email_corporativo, $datosCorreo);
+        // === Avisar al comercial asignado al evento ===
+        $com_email = '';
+        $com_nombre = '';
+        $eid = (int)$evento['id'];
+
+        $stmtc = $conn->prepare("SELECT u.email, u.nombre
+                                 FROM eventos e
+                                 INNER JOIN usuarios u ON u.id = e.comercial_user_id
+                                 WHERE e.id = ? LIMIT 1");
+        if ($stmtc) {
+            $stmtc->bind_param("i", $eid);
+            if ($stmtc->execute()) {
+                $stmtc->bind_result($c_email, $c_nombre);
+                if ($stmtc->fetch()) {
+                    $com_email  = $c_email;
+                    $com_nombre = $c_nombre;
+                }
+            }
+            $stmtc->close();
+        }
+
+        if (!empty($com_email)) {
+            // Ensamblar datos del aviso (usamos los mismos nombres ya existentes)
+            $aviso = array(
+                'evento_id'        => $eid,
+                'nombre_evento'    => $evento['nombre'],
+                'modalidad'        => $evento['modalidad'],
+                'resumen_fechas'   => $resumen_fechas,
+
+                'tipo_inscripcion' => $tipo_inscripcion,
+                'inscrito_nombre'  => $nombre,
+                'cedula'           => $cedula,
+                'cargo'            => $cargo,
+                'entidad'          => $entidad,
+                'ciudad'           => $ciudad,
+                'celular'          => $celular,
+                'email_personal'   => $email_personal,
+                'email_corporativo'=> $email_corporativo,
+                'medio'            => $medio
+            );
+
+            // Enviar aviso (no interrumpe el flujo si falla)
+            $okAviso = $correo->sendAvisoNuevaInscripcion($com_email, $aviso);
+            if (!$okAviso) {
+                error_log('[AVISO_COMERCIAL] Falló el envío al comercial: ' . $com_email);
+            }
+        }
+
 
         $mensaje_exito = true;
     } else {

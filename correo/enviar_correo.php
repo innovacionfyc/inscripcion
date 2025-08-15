@@ -296,4 +296,101 @@ class CorreoDenuncia {
             return false;
         }
     }
+
+    // ---------------------------------------------------------------------
+    // Aviso interno al comercial: nueva inscripción
+    // ---------------------------------------------------------------------
+    public function sendAvisoNuevaInscripcion($correoDestino, $data) {
+        $mail = new PHPMailer(true);
+        try {
+            // ====== SMTP (mismos valores que ya usas) ======
+            $mail->SMTPDebug   = 0;
+            $mail->Debugoutput = 'html';
+            $mail->isSMTP();
+            $mail->Host       = 'smtp-relay.gmail.com';
+            $mail->Port       = 25;              // sin TLS explícito
+            $mail->SMTPAuth   = true;
+            $mail->SMTPSecure = false;
+            $mail->SMTPOptions = array(
+                'ssl' => array(
+                    'verify_peer'       => false,
+                    'verify_peer_name'  => false,
+                    'allow_self_signed' => true
+                )
+            );
+
+            // Credenciales / remitente (igual a confirmación)
+            $smtpUser   = 'it@fycconsultores.com';
+            $smtpPass   = 'ecym cwbl dfkg maea'; // APP PASSWORD
+            $fromEmail  = 'certificados@fycconsultores.com';
+            $fromName   = 'F&C Consultores';
+
+            $mail->Username = $smtpUser;
+            $mail->Password = $smtpPass;
+
+            // Encabezados
+            $mail->CharSet  = 'UTF-8';
+            $mail->Encoding = 'base64';
+            $mail->setFrom($fromEmail, $fromName);
+            $mail->addAddress($correoDestino);
+
+            // Deja Reply-To al email corporativo (o personal) del inscrito
+            $replyTo = !empty($data['email_corporativo']) ? $data['email_corporativo'] : (!empty($data['email_personal']) ? $data['email_personal'] : null);
+            if (!empty($replyTo)) {
+                $mail->addReplyTo($replyTo, isset($data['inscrito_nombre']) ? $data['inscrito_nombre'] : '');
+            }
+
+            $mail->isHTML(true);
+
+            // Campos seguros
+            $ev   = isset($data['nombre_evento']) ? htmlspecialchars($data['nombre_evento'], ENT_QUOTES, 'UTF-8') : '';
+            $mod  = isset($data['modalidad']) ? htmlspecialchars($data['modalidad'], ENT_QUOTES, 'UTF-8') : '';
+            $sum  = isset($data['resumen_fechas']) ? $data['resumen_fechas'] : '';
+            $now  = date('Y-m-d H:i:s');
+
+            $mail->Subject = 'Nueva inscripción – ' . $ev;
+
+            // Datos del inscrito
+            $html = "
+            <div style='font-family:Arial, Helvetica, sans-serif;background:#f6f7fb;padding:24px'>
+              <div style='max-width:700px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden'>
+                <div style='padding:22px 26px; font-size:14px; color:#222'>
+                  <h2 style='margin:0 0 12px;color:#d32f57'>Nueva inscripción recibida</h2>
+
+                  <p style='margin:0 0 8px'><strong>Evento:</strong> {$ev}</p>
+                  <p style='margin:0 0 8px'><strong>Modalidad:</strong> {$mod}</p>
+                  ".(!empty($sum) ? "<p style='margin:0 0 12px'><strong>Fechas:</strong> {$sum}</p>" : "")."
+
+                  <div style='margin:14px 0; padding:12px; background:#fafafa; border:1px solid #eee; border-radius:10px;'>
+                    <p style='margin:0 0 8px'><strong>Tipo de inscripción:</strong> ".htmlspecialchars(isset($data['tipo_inscripcion'])?$data['tipo_inscripcion']:'', ENT_QUOTES, 'UTF-8')."</p>
+                    <p style='margin:0 0 8px'><strong>Nombre:</strong> ".htmlspecialchars(isset($data['inscrito_nombre'])?$data['inscrito_nombre']:'', ENT_QUOTES, 'UTF-8')."</p>
+                    <p style='margin:0 0 8px'><strong>Cédula:</strong> ".htmlspecialchars(isset($data['cedula'])?$data['cedula']:'', ENT_QUOTES, 'UTF-8')."</p>
+                    <p style='margin:0 0 8px'><strong>Cargo:</strong> ".htmlspecialchars(isset($data['cargo'])?$data['cargo']:'', ENT_QUOTES, 'UTF-8')."</p>
+                    <p style='margin:0 0 8px'><strong>Entidad:</strong> ".htmlspecialchars(isset($data['entidad'])?$data['entidad']:'', ENT_QUOTES, 'UTF-8')."</p>
+                    <p style='margin:0 0 8px'><strong>Ciudad:</strong> ".htmlspecialchars(isset($data['ciudad'])?$data['ciudad']:'', ENT_QUOTES, 'UTF-8')."</p>
+                    <p style='margin:0 0 8px'><strong>Celular:</strong> ".htmlspecialchars(isset($data['celular'])?$data['celular']:'', ENT_QUOTES, 'UTF-8')."</p>
+                    <p style='margin:0 0 8px'><strong>Email corporativo:</strong> ".htmlspecialchars(isset($data['email_corporativo'])?$data['email_corporativo']:'', ENT_QUOTES, 'UTF-8')."</p>
+                    ".(!empty($data['email_personal']) ? "<p style='margin:0 0 8px'><strong>Email personal:</strong> ".htmlspecialchars($data['email_personal'], ENT_QUOTES, 'UTF-8')."</p>" : "")."
+                    ".(!empty($data['medio']) ? "<p style='margin:0 0 8px'><strong>Medio por el que se enteró:</strong> ".htmlspecialchars($data['medio'], ENT_QUOTES, 'UTF-8')."</p>" : "")."
+                  </div>
+
+                  <p style='margin:10px 0 0; font-size:12px; color:#666'>Recibido: {$now}</p>
+                </div>
+                <div style='background:#f1f1f1;text-align:center;padding:12px;font-size:12px;color:#888'>
+                  F&C Consultores © ".date('Y')."
+                </div>
+              </div>
+            </div>";
+
+            $mail->MsgHTML($html);
+            $mail->AltBody = "Nueva inscripción en {$ev}. Inscrito: ".(isset($data['inscrito_nombre'])?$data['inscrito_nombre']:'')." - ".(isset($data['email_corporativo'])?$data['email_corporativo']:'');
+
+            return $mail->send();
+
+        } catch (Exception $e) {
+            error_log('No se pudo enviar AVISO a comercial: ' . $mail->ErrorInfo);
+            return false;
+        }
+    }
+
 }
