@@ -165,8 +165,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <label class="font-semibold">Soporte de pago (opcional – reemplaza el existente)</label>
         <input type="file" name="soporte_pago" accept=".pdf,image/*" class="w-full p-3 border border-gray-300 rounded-xl">
         <?php if (!empty($rsoporte)): ?>
+          <?php $urlSoporte = '/' . ltrim($rsoporte, '/'); ?>
           <p class="text-sm text-gray-600 mt-2">
-            Actual: <a class="text-sky-700 underline" href="<?php echo htmlspecialchars(base_url($rsoporte), ENT_QUOTES, 'UTF-8'); ?>" target="_blank">Ver soporte</a>
+            Actual: <a class="text-sky-700 underline" href="<?php echo htmlspecialchars($urlSoporte, ENT_QUOTES, 'UTF-8'); ?>" target="_blank">Ver soporte</a>
           </p>
         <?php else: ?>
           <p class="text-sm text-gray-500 mt-2">Sin soporte actual.</p>

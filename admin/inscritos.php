@@ -149,11 +149,12 @@ $stmt->close();
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['email_corporativo'] ?: $r['email_personal'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['tipo_inscripcion'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3">
-                  <?php if (!empty($r['soporte_pago'])):
-                        $url = base_url($r['soporte_pago']);
-                        $abs = rtrim($_SERVER['DOCUMENT_ROOT'],'/') . '/' . ltrim($r['soporte_pago'],'/');
-                        $existe = is_file($abs);
-                  ?>
+                    <?php if (!empty($r['soporte_pago'])):
+                          // URL absoluta desde la raíz del sitio (sin /public)
+                          $url = '/' . ltrim($r['soporte_pago'], '/');
+                          $abs = rtrim($_SERVER['DOCUMENT_ROOT'],'/') . '/' . ltrim($r['soporte_pago'],'/');
+                          $existe = is_file($abs);
+                    ?>
                     <?php if ($existe): ?>
                       <a href="<?php echo htmlspecialchars($url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank"
                          class="inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg">Ver</a>
