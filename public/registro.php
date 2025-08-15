@@ -123,11 +123,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         // --- Armar datos del correo ---
         $es_presencial = (strtolower($evento['modalidad']) === 'presencial');
 
-        // PDF (ruta en /public/docs/)
-        $path_pdf = $es_presencial ? (__DIR__ . '/docs/GUIA_HOTELERA_2025_Cafam.pdf') : null;
-        if ($path_pdf && !file_exists($path_pdf)) {
-            error_log("PDF no encontrado: " . $path_pdf);
-            $path_pdf = null;
+        /**
+         * Nombre correcto del PDF según lo que definimos en el proyecto:
+         * "GUIA HOTELERA 2025 - Cafam.pdf"
+         *
+         * Y la ruta correcta es a nivel del proyecto, no del archivo.
+         * Como este archivo está en una subcarpeta, usamos dirname(__DIR__)
+         * para subir un nivel y luego /docs/...
+         */
+        $path_pdf = null;
+        if ($es_presencial) {
+            $pdf_nombre = 'GUIA HOTELERA 2025 - Cafam.pdf';
+            $path_pdf_candidato = dirname(__DIR__) . '/docs/' . $pdf_nombre;
+
+            if (is_file($path_pdf_candidato)) {
+                $path_pdf = $path_pdf_candidato;
+            } else {
+                error_log('PDF no encontrado (revisa nombre y carpeta): ' . $path_pdf_candidato);
+            }
         }
 
         // === FIRMA: ruta de archivo en el servidor para embeber por CID ===
@@ -159,6 +172,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $datosCorreo = array(
             // Evento
+            'evento_id'        => (int)$evento['id'], // <-- IMPORTANTE para completar whatsapp/firma si faltan
             'nombre_evento'    => $evento['nombre'],
             'modalidad'        => $evento['modalidad'],
             'fecha_limite'     => $evento['fecha_limite'],
