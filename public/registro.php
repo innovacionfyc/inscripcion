@@ -115,9 +115,53 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $email_corporativo = isset($_POST["email_corporativo"]) ? $_POST["email_corporativo"] : '';
     $medio             = isset($_POST["medio"]) ? $_POST["medio"] : '';
 
-    $stmt = $conn->prepare("INSERT INTO inscritos (evento_id, tipo_inscripcion, nombre, cedula, cargo, entidad, celular, ciudad, email_personal, email_corporativo, medio)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("issssssssss", $evento_id, $tipo_inscripcion, $nombre, $cedula, $cargo, $entidad, $celular, $ciudad, $email_personal, $email_corporativo, $medio);
+
+    // --- Soporte de pago (opcional) ---
+    $soporte_rel = ''; // guardaremos ruta relativa: "uploads/soportes/archivo.ext"
+    if (isset($_FILES['soporte_pago']) && is_array($_FILES['soporte_pago']) && $_FILES['soporte_pago']['error'] === 0) {
+        $maxBytes = 10 * 1024 * 1024; // 10 MB
+        $tmpName  = $_FILES['soporte_pago']['tmp_name'];
+        $origName = $_FILES['soporte_pago']['name'];
+        $size     = (int)$_FILES['soporte_pago']['size'];
+
+        if ($size <= $maxBytes && is_uploaded_file($tmpName)) {
+            // Extensión permitida
+            $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+            $permitidas = array('pdf','jpg','jpeg','png','gif','webp');
+            if (in_array($ext, $permitidas)) {
+                // Carpeta destino física
+                $destDir = dirname(__DIR__) . '/uploads/soportes/';
+                if (!is_dir($destDir)) {
+                    @mkdir($destDir, 0775, true);
+                }
+
+                // Nombre seguro y único
+                $nombreSeguro = 'soporte_' . date('Ymd_His') . '_' . mt_rand(1000,9999) . '.' . $ext;
+
+                // Mover
+                if (@move_uploaded_file($tmpName, $destDir . $nombreSeguro)) {
+                    $soporte_rel = 'uploads/soportes/' . $nombreSeguro; // ruta que podrás linkear
+                } else {
+                    error_log('[SOPORTE] No se pudo mover el archivo subido.');
+                }
+            } else {
+                error_log('[SOPORTE] Extensión no permitida: ' . $ext);
+            }
+        } else {
+            error_log('[SOPORTE] Archivo supera el límite o no es válido.');
+        }
+    }
+
+
+    $stmt = $conn->prepare("INSERT INTO inscritos (
+        evento_id, tipo_inscripcion, nombre, cedula, cargo, entidad, celular, ciudad,
+        email_personal, email_corporativo, medio, soporte_pago
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("isssssssssss",
+        $evento_id, $tipo_inscripcion, $nombre, $cedula, $cargo, $entidad, $celular, $ciudad,
+        $email_personal, $email_corporativo, $medio, $soporte_rel
+    );
+
 
     if ($stmt->execute()) {
         // --- Armar datos del correo ---
@@ -282,7 +326,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         </div>
       <?php endif; ?>
 
-      <form method="POST" onsubmit="return validarFormulario()" class="space-y-4">
+        <form method="POST" onsubmit="return validarFormulario()" enctype="multipart/form-data" class="space-y-4">
         <input type="hidden" name="evento_id" value="<?php echo (int)$evento['id']; ?>">
 
         <div class="flex gap-4">
@@ -302,6 +346,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <input type="text" name="ciudad" placeholder="Ciudad" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
         <input type="email" name="email_personal" placeholder="Email Personal (opcional)" class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
         <input type="email" name="email_corporativo" placeholder="Email Corporativo" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
+        <input type="file" name="soporte_pago" accept=".pdf,image/*"
+          class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500"
+        />
+        <p class="text-sm text-gray-500 -mt-2">Opcional. PDF o imagen (máx. 10 MB).</p>
         <input type="text" name="medio" placeholder="¿Por qué medio se enteró?" class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
 
         <button type="submit" class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 px-6 rounded-xl w-full transition-all duration-300 hover:scale-[1.01] active:scale-[0.98]">
