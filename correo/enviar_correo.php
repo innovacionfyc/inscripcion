@@ -35,23 +35,21 @@ class CorreoDenuncia {
         $mail = new PHPMailer(true);
 
         // ====== OPCIONAL: completar desde BD (evento → comercial) si faltan datos ======
-        // Si NO te pasan whatsapp/firma/encargado, intentamos obtenerlos con evento_id
         $comWaDb = null;       // whatsapp del comercial (solo dígitos)
         $comFirmaPath = null;  // ruta relativa tipo "uploads/firmas/xxx.png"
         $comNombre = null;     // nombre comercial
+
         if (
             (!isset($data['whatsapp_numero']) || empty($data['whatsapp_numero']))
             || (empty($data['firma_file']) && empty($data['firma_url_public']))
             || (empty($data['encargado_nombre']))
         ) {
             if (!empty($data['evento_id'])) {
-                // Conexión y helper de URL para armar firma pública si hace falta
-                $conn = null;
-                $baseUrlFn = null;
                 // Conexión
-                $tryConn = @require_once dirname(__DIR__) . '/db/conexion.php';
+                $conn = null;
+                @require_once dirname(__DIR__) . '/db/conexion.php'; // define $conn (mysqli)
+
                 if (isset($conn) && $conn instanceof mysqli) {
-                    // Cargar comercial del evento
                     $sql = "SELECT u.nombre, u.whatsapp, u.firma_path
                             FROM eventos e
                             LEFT JOIN usuarios u ON u.id = e.comercial_user_id
@@ -61,20 +59,20 @@ class CorreoDenuncia {
                         if ($st->execute()) {
                             $st->bind_result($rNom, $rWa, $rFirma);
                             if ($st->fetch()) {
-                                $comNombre   = $rNom ?: null;
-                                $comWaDb     = $rWa ? preg_replace('/\D+/', '', $rWa) : null;
-                                $comFirmaPath= $rFirma ?: null; // p.ej. "uploads/firmas/firma_123.png"
+                                $comNombre    = $rNom ?: null;
+                                $comWaDb      = $rWa ? preg_replace('/\D+/', '', $rWa) : null;
+                                $comFirmaPath = $rFirma ?: null; // p.ej. "uploads/firmas/firma_123.png"
                             }
                         }
                         $st->close();
                     }
                 }
-                // Intentar función base_url si existe
+
+                // base_url() si está disponible
+                $baseUrlFn = null;
                 if (is_file(dirname(__DIR__) . '/config/url.php')) {
                     @require_once dirname(__DIR__) . '/config/url.php';
-                    if (function_exists('base_url')) {
-                        $baseUrlFn = 'base_url';
-                    }
+                    if (function_exists('base_url')) $baseUrlFn = 'base_url';
                 }
 
                 // Completar whatsapp si faltaba
@@ -82,27 +80,23 @@ class CorreoDenuncia {
                     $data['whatsapp_numero'] = $comWaDb;
                 }
 
-                // Completar nombre encargado si faltaba
+                // Completar encargado si faltaba
                 if (empty($data['encargado_nombre']) && !empty($comNombre)) {
                     $data['encargado_nombre'] = $comNombre;
                 }
 
                 // Completar firma si faltaba
                 if (empty($data['firma_file']) && empty($data['firma_url_public']) && !empty($comFirmaPath)) {
-                    // Ruta absoluta del archivo (si existe en el servidor)
                     $abs = dirname(__DIR__) . '/' . ltrim($comFirmaPath, '/');
                     if (is_file($abs)) {
                         $data['firma_file'] = $abs; // preferimos embebida por CID
-                    } else {
-                        // Como fallback, intentamos construir URL pública si tenemos base_url()
-                        if ($baseUrlFn) {
-                            $data['firma_url_public'] = call_user_func($baseUrlFn, $comFirmaPath);
-                        }
+                    } elseif ($baseUrlFn) {
+                        $data['firma_url_public'] = call_user_func($baseUrlFn, $comFirmaPath);
                     }
                 }
             }
         }
-        // ====== FIN de completar desde BD ======
+        // ====== FIN completar desde BD ======
 
         try {
             // ====== SMTP (ajústalo a tu servidor) ======
@@ -121,7 +115,7 @@ class CorreoDenuncia {
                 )
             );
 
-            // Credenciales / remitente
+            // Credenciales / remitente (dejas tus valores actuales)
             $smtpUser   = 'it@fycconsultores.com';
             $smtpPass   = 'ecym cwbl dfkg maea'; // APP PASSWORD
             $fromEmail  = 'certificados@fycconsultores.com';
@@ -145,7 +139,7 @@ class CorreoDenuncia {
                 $mail->addEmbeddedImage($data['url_imagen'], $cidImg);
             }
 
-            // PDF adjunto (si existe)
+            // PDF adjunto (si existe). En tu flujo solo viene para presencial.
             if (!empty($data['adjunto_pdf'])) {
                 if (!file_exists($data['adjunto_pdf'])) {
                     error_log("PDF no encontrado: " . $data['adjunto_pdf']);
@@ -156,8 +150,14 @@ class CorreoDenuncia {
 
             // ====== Contenido ======
             $mail->isHTML(true);
-            $asunto = 'Confirmación de inscripción – ' . (isset($data['nombre_evento']) ? $data['nombre_evento'] : '');
-            $mail->Subject = $asunto;
+
+            $modalidadTxt   = isset($data['modalidad']) ? htmlspecialchars($data['modalidad'], ENT_QUOTES, 'UTF-8') : '';
+            $nombreEvento   = isset($data['nombre_evento']) ? htmlspecialchars($data['nombre_evento'], ENT_QUOTES, 'UTF-8') : '';
+            $resumenFechas  = isset($data['resumen_fechas']) ? $data['resumen_fechas'] : '';
+            $detalleHorario = isset($data['detalle_horario']) ? $data['detalle_horario'] : '';
+            $fechaLimite    = isset($data['fecha_limite']) ? $data['fecha_limite'] : '';
+
+            $mail->Subject = 'Confirmación de inscripción – ' . $nombreEvento;
 
             $bannerImg = $cidImg
                 ? "<img src='cid:{$cidImg}' alt='Evento' style='width:100%; max-height:260px; object-fit:cover; border-radius:12px 12px 0 0'>"
@@ -171,19 +171,10 @@ class CorreoDenuncia {
                 ? "<p style='margin:0'>📎 Se adjunta la guía hotelera en PDF.</p>"
                 : '';
 
-            // Sanitiza mínimos
-            $modalidadTxt    = isset($data['modalidad']) ? htmlspecialchars($data['modalidad'], ENT_QUOTES, 'UTF-8') : '';
-            $nombreEvento    = isset($data['nombre_evento']) ? htmlspecialchars($data['nombre_evento'], ENT_QUOTES, 'UTF-8') : '';
-            $resumenFechas   = isset($data['resumen_fechas']) ? $data['resumen_fechas'] : '';
-            $detalleHorario  = isset($data['detalle_horario']) ? $data['detalle_horario'] : '';
-            $fechaLimite     = isset($data['fecha_limite']) ? $data['fecha_limite'] : '';
-
             $fechaLimiteTxt = '';
             if (!empty($fechaLimite)) {
                 $ts = strtotime($fechaLimite);
-                if ($ts !== false) {
-                    $fechaLimiteTxt = date('d/m/Y', $ts);
-                }
+                if ($ts !== false) $fechaLimiteTxt = date('d/m/Y', $ts);
             }
 
             // Encabezado “Señores: (Entidad) (Nombre)”
@@ -199,15 +190,13 @@ class CorreoDenuncia {
                 $encabezado .= "</p>";
             }
 
-            // ====== Botón de WhatsApp (usa comercial del evento por defecto) ======
-            // Prioridad: $data['whatsapp_numero'] → si no, lo que miramos en BD arriba
+            // Botón de WhatsApp
             $btnWhatsapp = '';
             $waNum = !empty($data['whatsapp_numero']) ? preg_replace('/\D/', '', $data['whatsapp_numero']) : '';
-            if (empty($waNum) && !empty($comWaDb)) {
-                $waNum = $comWaDb;
-            }
+            if (empty($waNum) && !empty($comWaDb)) $waNum = $comWaDb;
+
             if (!empty($waNum)) {
-                $txt = rawurlencode('Hola, tengo una consulta sobre el evento ' . (isset($data['nombre_evento']) ? $data['nombre_evento'] : ''));
+                $txt = rawurlencode('Hola, tengo una consulta sobre el evento ' . ($data['nombre_evento'] ?? ''));
                 $btnWhatsapp = '<p style="margin:16px 0 0">
                     <a href="https://wa.me/'.$waNum.'?text='.$txt.'" target="_blank"
                        style="display:inline-block;background:#25D366;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">
@@ -216,7 +205,7 @@ class CorreoDenuncia {
                   </p>';
             }
 
-            // ====== Firma (preferir embebida por CID; si no, URL pública) ======
+            // Firma (preferir CID; si no, URL)
             $firmaHtml   = '';
             $firmaImgTag = '';
             $encargadoNombre = !empty($data['encargado_nombre']) ? $data['encargado_nombre'] : ($comNombre ?: '');
@@ -237,7 +226,7 @@ class CorreoDenuncia {
                            . '</div>';
             }
 
-            // ====== HTML final ======
+            // HTML final
             $html = "
             <div style='font-family:Arial, Helvetica, sans-serif;background:#f6f7fb;padding:24px'>
               <div style='max-width:700px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden'>
@@ -248,17 +237,17 @@ class CorreoDenuncia {
 
                   <p style='margin:0 0 10px'>Gracias por sumarse a este espacio de aprendizaje. Su inscripción ha sido confirmada. A continuación, encontrará los detalles del evento:</p>
 
-                  <h3 style='margin:0 0 14px;color:#d32f57;font-size:20px'>{$nombreEvento}</h3>
+                  <h3 style='margin:0 0 14px;color:#d32f57;font-size:20px'>".$nombreEvento."</h3>
 
-                  <p style='margin:0 0 12px'><strong>Modalidad:</strong> {$modalidadTxt}</p>
+                  <p style='margin:0 0 12px'><strong>Modalidad:</strong> ".$modalidadTxt."</p>
 
                   <p style='margin:0 0 6px'><strong>📌 Fecha y Horario</strong></p>
-                  <p style='margin:0 0 8px'>📅 {$resumenFechas}</p>
+                  <p style='margin:0 0 8px'>📅 ".$resumenFechas."</p>
                   <div style='margin:8px 0 18px; padding:14px; background:#fafafa; border:1px solid #eee; border-radius:10px;'>
-                    {$detalleHorario}
+                    ".$detalleHorario."
                   </div>
 
-                  {$lugarHtml}
+                  ".$lugarHtml."
 
                   <p style='margin:14px 0 8px'><strong>🔹 Tenga en cuenta:</strong></p>
                   <ul style='margin:8px 0 18px; padding-left:18px; color:#333'>
@@ -267,11 +256,11 @@ class CorreoDenuncia {
                    "<li>Un día antes del evento recibirá el cronograma detallado.</li>
                   </ul>
 
-                  {$btnWhatsapp}
+                  ".$btnWhatsapp."
 
                   <p style='margin-top:24px'>¡Nos vemos pronto!</p>
                   <p style='margin:0'>Cordialmente,</p>
-                  {$firmaHtml}
+                  ".$firmaHtml."
 
                   ".($pdfAviso ? $pdfAviso : "")."
 
@@ -284,7 +273,12 @@ class CorreoDenuncia {
             </div>";
 
             $mail->MsgHTML($html);
-            $mail->AltBody = "Inscripción confirmada a {$nombreEvento} ({$modalidadTxt}). Fechas: {$resumenFechas}.";
+
+            // AltBody robusto (sin nulls)
+            $altNombreEvento = $data['nombre_evento'] ?? '';
+            $altModalidad    = $data['modalidad'] ?? '';
+            $altResumen      = strip_tags($resumenFechas);
+            $mail->AltBody   = "Inscripción confirmada a {$altNombreEvento} ({$altModalidad}). Fechas: {$altResumen}.";
 
             return $mail->send();
 
