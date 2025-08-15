@@ -269,7 +269,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 'nombre_evento'    => $evento['nombre'],
                 'modalidad'        => $evento['modalidad'],
                 'resumen_fechas'   => $resumen_fechas,
-
                 'tipo_inscripcion' => $tipo_inscripcion,
                 'inscrito_nombre'  => $nombre,
                 'cedula'           => $cedula,
@@ -279,7 +278,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 'celular'          => $celular,
                 'email_personal'   => $email_personal,
                 'email_corporativo'=> $email_corporativo,
-                'medio'            => $medio
+                'medio'            => $medio,
+                'soporte_pago'     => $soporte_rel   // ← NUEVO: ruta relativa si el inscrito subió soporte
             );
 
             // Enviar aviso (no interrumpe el flujo si falla)

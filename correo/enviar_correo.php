@@ -298,7 +298,7 @@ class CorreoDenuncia {
     }
 
     // ---------------------------------------------------------------------
-    // Aviso interno al comercial: nueva inscripción
+    // Aviso interno al comercial: nueva inscripción (adjunta soporte si existe)
     // ---------------------------------------------------------------------
     public function sendAvisoNuevaInscripcion($correoDestino, $data) {
         $mail = new PHPMailer(true);
@@ -319,7 +319,7 @@ class CorreoDenuncia {
                 )
             );
 
-            // Credenciales / remitente (igual a confirmación)
+            // Credenciales / remitente
             $smtpUser   = 'it@fycconsultores.com';
             $smtpPass   = 'ecym cwbl dfkg maea'; // APP PASSWORD
             $fromEmail  = 'certificados@fycconsultores.com';
@@ -334,10 +334,29 @@ class CorreoDenuncia {
             $mail->setFrom($fromEmail, $fromName);
             $mail->addAddress($correoDestino);
 
-            // Deja Reply-To al email corporativo (o personal) del inscrito
-            $replyTo = !empty($data['email_corporativo']) ? $data['email_corporativo'] : (!empty($data['email_personal']) ? $data['email_personal'] : null);
+            // Reply-To al correo del inscrito (si viene)
+            $replyTo = !empty($data['email_corporativo']) ? $data['email_corporativo']
+                     : (!empty($data['email_personal']) ? $data['email_personal'] : null);
             if (!empty($replyTo)) {
                 $mail->addReplyTo($replyTo, isset($data['inscrito_nombre']) ? $data['inscrito_nombre'] : '');
+            }
+
+            // ====== Adjuntar soporte si existe (ruta relativa tipo uploads/soportes/xxx.pdf) ======
+            $hayAdjunto = false;
+            $rel = '';
+            if (!empty($data['soporte_pago'])) {
+                $rel = $data['soporte_pago'];
+            } elseif (!empty($data['soporte_rel'])) { // por si usas otra clave
+                $rel = $data['soporte_rel'];
+            }
+            if (!empty($rel)) {
+                $abs = rtrim($_SERVER['DOCUMENT_ROOT'],'/') . '/' . ltrim($rel, '/');
+                if (is_file($abs)) {
+                    $mail->addAttachment($abs, basename($rel));
+                    $hayAdjunto = true;
+                } else {
+                    error_log('[AVISO_COMERCIAL] Soporte no encontrado en disco: ' . $abs);
+                }
             }
 
             $mail->isHTML(true);
@@ -358,8 +377,8 @@ class CorreoDenuncia {
                   <h2 style='margin:0 0 12px;color:#d32f57'>Nueva inscripción recibida</h2>
 
                   <p style='margin:0 0 8px'><strong>Evento:</strong> {$ev}</p>
-                  <p style='margin:0 0 8px'><strong>Modalidad:</strong> {$mod}</p>
-                  ".(!empty($sum) ? "<p style='margin:0 0 12px'><strong>Fechas:</strong> {$sum}</p>" : "")."
+                  <p style='margin:0 0 8px'><strong>Modalidad:</strong> {$mod}</p>".
+                  (!empty($sum) ? "<p style='margin:0 0 12px'><strong>Fechas:</strong> {$sum}</p>" : "") ."
 
                   <div style='margin:14px 0; padding:12px; background:#fafafa; border:1px solid #eee; border-radius:10px;'>
                     <p style='margin:0 0 8px'><strong>Tipo de inscripción:</strong> ".htmlspecialchars(isset($data['tipo_inscripcion'])?$data['tipo_inscripcion']:'', ENT_QUOTES, 'UTF-8')."</p>
@@ -369,10 +388,12 @@ class CorreoDenuncia {
                     <p style='margin:0 0 8px'><strong>Entidad:</strong> ".htmlspecialchars(isset($data['entidad'])?$data['entidad']:'', ENT_QUOTES, 'UTF-8')."</p>
                     <p style='margin:0 0 8px'><strong>Ciudad:</strong> ".htmlspecialchars(isset($data['ciudad'])?$data['ciudad']:'', ENT_QUOTES, 'UTF-8')."</p>
                     <p style='margin:0 0 8px'><strong>Celular:</strong> ".htmlspecialchars(isset($data['celular'])?$data['celular']:'', ENT_QUOTES, 'UTF-8')."</p>
-                    <p style='margin:0 0 8px'><strong>Email corporativo:</strong> ".htmlspecialchars(isset($data['email_corporativo'])?$data['email_corporativo']:'', ENT_QUOTES, 'UTF-8')."</p>
-                    ".(!empty($data['email_personal']) ? "<p style='margin:0 0 8px'><strong>Email personal:</strong> ".htmlspecialchars($data['email_personal'], ENT_QUOTES, 'UTF-8')."</p>" : "")."
-                    ".(!empty($data['medio']) ? "<p style='margin:0 0 8px'><strong>Medio por el que se enteró:</strong> ".htmlspecialchars($data['medio'], ENT_QUOTES, 'UTF-8')."</p>" : "")."
-                  </div>
+                    <p style='margin:0 0 8px'><strong>Email corporativo:</strong> ".htmlspecialchars(isset($data['email_corporativo'])?$data['email_corporativo']:'', ENT_QUOTES, 'UTF-8')."</p>".
+                    (!empty($data['email_personal']) ? "<p style='margin:0 0 8px'><strong>Email personal:</strong> ".htmlspecialchars($data['email_personal'], ENT_QUOTES, 'UTF-8')."</p>" : "").
+                    (!empty($data['medio']) ? "<p style='margin:0 0 8px'><strong>Medio por el que se enteró:</strong> ".htmlspecialchars($data['medio'], ENT_QUOTES, 'UTF-8')."</p>" : "").
+                  "</div>
+
+                  ".($hayAdjunto ? "<p style='margin:10px 0 0; color:#0a7'>📎 Se adjuntó el soporte de pago.</p>" : "<p style='margin:10px 0 0; color:#a70'>⚠️ El inscrito no adjuntó soporte.</p>")."
 
                   <p style='margin:10px 0 0; font-size:12px; color:#666'>Recibido: {$now}</p>
                 </div>
@@ -383,7 +404,7 @@ class CorreoDenuncia {
             </div>";
 
             $mail->MsgHTML($html);
-            $mail->AltBody = "Nueva inscripción en {$ev}. Inscrito: ".(isset($data['inscrito_nombre'])?$data['inscrito_nombre']:'')." - ".(isset($data['email_corporativo'])?$data['email_corporativo']:'');
+            $mail->AltBody = "Nueva inscripción en {$ev}. Inscrito: ".(isset($data['inscrito_nombre'])?$data['inscrito_nombre']:'')." - ".(isset($data['email_corporativo'])?$data['email_corporativo']:'').($hayAdjunto?' (se adjunta soporte)':' (sin soporte)');
 
             return $mail->send();
 
