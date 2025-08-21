@@ -237,18 +237,20 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         </select>
       </div>
 
-      <!-- Subida de docs para VIRTUAL -->
+      <!-- Adjuntos para VIRTUAL -->
       <div id="docs_virtual_wrap" style="display:none; margin-top:12px;">
-        <label><strong>Adjuntos para evento virtual</strong></label>
-        <input type="file" name="docs_virtual[]" multiple>
-        <small>Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB por archivo.</small>
+        <label class="block font-semibold mb-1">Adjuntos para evento virtual</label>
+        <input type="file" name="docs_virtual[]" multiple
+               class="w-full p-3 border border-gray-300 rounded-xl">
+        <small class="text-gray-500">Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB c/u.</small>
       </div>
 
-      <!-- Subida de docs para PRESENCIAL -->
+      <!-- Adjuntos para PRESENCIAL -->
       <div id="docs_presencial_wrap" style="display:none; margin-top:12px;">
-        <label><strong>Adjuntos para evento presencial</strong></label>
-        <input type="file" name="docs_presencial[]" multiple>
-        <small>Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB por archivo.</small>
+        <label class="block font-semibold mb-1">Adjuntos para evento presencial</label>
+        <input type="file" name="docs_presencial[]" multiple
+               class="w-full p-3 border border-gray-300 rounded-xl">
+        <small class="text-gray-500">Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB c/u.</small>
       </div>
 
 
@@ -267,39 +269,41 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
 
   <script src="../assets/js/jquery.min.js"></script>
   <script>
-     // mostrar/ocultar inputs según modalidad
-    (function(){
-      function toggleWrap() {
-        var mod = document.querySelector('input[name="modalidad"]:checked');
-        var v = mod ? mod.value.toLowerCase() : '';
-        document.getElementById('docs_virtual_wrap').style.display = (v === 'virtual') ? 'block' : 'none';
-        document.getElementById('docs_presencial_wrap').style.display = (v === 'presencial') ? 'block' : 'none';
+    (function () {
+      function getModalidad() {
+        // 1) select
+        var sel = document.querySelector('select[name="modalidad"], #modalidad');
+        if (sel && typeof sel.value !== 'undefined') {
+          return String(sel.value || '').toLowerCase();
+        }
+        // 2) radios
+        var checked = document.querySelector('input[name="modalidad"]:checked');
+        if (checked) return String(checked.value || '').toLowerCase();
+        return '';
       }
+
+      function toggleWrap() {
+        var v = getModalidad();
+        var vWrap = document.getElementById('docs_virtual_wrap');
+        var pWrap = document.getElementById('docs_presencial_wrap');
+        if (vWrap) vWrap.style.display = (v === 'virtual') ? 'block' : 'none';
+        if (pWrap) pWrap.style.display = (v === 'presencial') ? 'block' : 'none';
+      }
+
+      // Escuchar cambios del select (si existe)
+      var sel = document.querySelector('select[name="modalidad"], #modalidad');
+      if (sel) sel.addEventListener('change', toggleWrap);
+
+      // Escuchar cambios de radios (por si acaso)
       var radios = document.querySelectorAll('input[name="modalidad"]');
-      for (var i=0;i<radios.length;i++){ radios[i].addEventListener('change', toggleWrap); }
+      for (var i = 0; i < radios.length; i++) {
+        radios[i].addEventListener('change', toggleWrap);
+      }
+
+      // Ejecutar al cargar
       toggleWrap();
     })();
-
-    $('#num_dias').on('change', function () {
-      var num = parseInt(this.value || 0, 10);
-      var container = $('#dias_container');
-      container.empty();
-      for (var i = 1; i <= num; i++) {
-        container.append(
-          '<div class="p-4 border border-gray-200 rounded-xl">' +
-            '<h3 class="font-bold mb-2 text-[#685f2f]">Día ' + i + '</h3>' +
-            '<label>Fecha:</label>' +
-            '<input type="date" name="fechas[]" class="block w-full p-2 border border-gray-300 rounded-xl mb-2" required>' +
-            '<label>Horario (inicio y fin):</label>' +
-            '<div class="flex gap-4">' +
-              '<input type="time" name="hora_inicio[]" class="w-1/2 p-2 border border-gray-300 rounded-xl" required>' +
-              '<input type="time" name="hora_fin[]" class="w-1/2 p-2 border border-gray-300 rounded-xl" required>' +
-            '</div>' +
-          '</div>'
-        );
-      }
-    });
-
+    
     function copiarURL() {
       var input = document.getElementById('urlFormulario');
       var msg   = document.getElementById('mensajeCopiado');
