@@ -99,28 +99,71 @@ $detalle_horario = !empty($fechas) ? detalleHorarioHtml($fechas) : '<em>Pronto t
 
 $mensaje_exito = false;
 
-// --- Helper MAYÚSCULAS compatible con PHP antiguo (sin mbstring) ---
+// =========================
+// Helpers de normalización (compatibles con PHP viejo)
+// =========================
+
+// Mayúsculas con tildes (para ENTIDAD)
 if (!function_exists('strtoupper_utf8')) {
     function strtoupper_utf8($texto) {
-        // Normaliza espacios
         $texto = trim($texto);
-        // Sube a mayúsculas base (ASCII)
         $upper = strtoupper($texto);
-        // Corrige tildes y caracteres comunes en ES
-        // (agrega más pares si lo necesitas)
         $map = array(
             'á'=>'Á','é'=>'É','í'=>'Í','ó'=>'Ó','ú'=>'Ú',
             'à'=>'À','è'=>'È','ì'=>'Ì','ò'=>'Ò','ù'=>'Ù',
             'ä'=>'Ä','ë'=>'Ë','ï'=>'Ï','ö'=>'Ö','ü'=>'Ü',
             'ñ'=>'Ñ','ç'=>'Ç'
         );
-        // Reemplaza SOLO si el original tenía minúsculas acentuadas
-        // Esto evita dañar cadenas ya en mayúscula.
         $upper = strtr($upper, $map);
-
-        // Limpieza opcional de espacios múltiples
-        $upper = preg_replace('/\s+/u', ' ', $upper);
+        $upper = preg_replace('/\s+/', ' ', $upper);
         return $upper;
+    }
+}
+
+// Minúsculas con tildes (soporte Title Case)
+if (!function_exists('strtolower_utf8')) {
+    function strtolower_utf8($t) {
+        $map = array(
+            'Á'=>'á','É'=>'é','Í'=>'í','Ó'=>'ó','Ú'=>'ú',
+            'À'=>'à','È'=>'è','Ì'=>'ì','Ò'=>'ò','Ù'=>'ù',
+            'Ä'=>'ä','Ë'=>'ë','Ï'=>'ï','Ö'=>'ö','Ü'=>'ü',
+            'Ñ'=>'ñ','Ç'=>'ç'
+        );
+        return strtolower(strtr($t, $map));
+    }
+}
+
+// Title Case simple (para NOMBRES y APELLIDOS)
+if (!function_exists('titlecase_es')) {
+    function titlecase_es($texto) {
+        $texto = trim($texto);
+        $texto = strtolower_utf8($texto);
+        $texto = preg_replace('/\s+/', ' ', $texto);
+
+        $seps = array(' ', '-', '\'');
+        $chars_lower = array('á','é','í','ó','ú','à','è','ì','ò','ù','ä','ë','ï','ö','ü','ñ','ç');
+        $chars_upper = array('Á','É','Í','Ó','Ú','À','È','Ì','Ò','Ù','Ä','Ë','Ï','Ö','Ü','Ñ','Ç');
+
+        $out = '';
+        $len = strlen($texto);
+        $capitalize_next = true;
+
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $texto[$i];
+            if (in_array($ch, $seps, true)) {
+                $out .= $ch;
+                $capitalize_next = true;
+                continue;
+            }
+            if ($capitalize_next) {
+                $pos = array_search($ch, $chars_lower, true);
+                $out .= ($pos !== false) ? $chars_upper[$pos] : strtoupper($ch);
+                $capitalize_next = false;
+            } else {
+                $out .= $ch;
+            }
+        }
+        return $out;
     }
 }
 
@@ -130,7 +173,17 @@ if (!function_exists('strtoupper_utf8')) {
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $evento_id         = isset($_POST["evento_id"]) ? $_POST["evento_id"] : 0;
     $tipo_inscripcion  = isset($_POST["tipo_inscripcion"]) ? $_POST["tipo_inscripcion"] : '';
-    $nombre            = isset($_POST["nombre"]) ? $_POST["nombre"] : '';
+
+    // Nombres / Apellidos (Title Case)
+    $nombres   = isset($_POST['nombres'])   ? $_POST['nombres']   : '';
+    $apellidos = isset($_POST['apellidos']) ? $_POST['apellidos'] : '';
+    $nombres   = titlecase_es($nombres);
+    $apellidos = titlecase_es($apellidos);
+
+    // Compatibilidad con código viejo que usa `nombre`
+    $nombre_completo = trim($nombres . ' ' . $apellidos);
+    $nombre = $nombre_completo;
+
     $cedula            = isset($_POST["cedula"]) ? $_POST["cedula"] : '';
     $cargo             = isset($_POST["cargo"]) ? $_POST["cargo"] : '';
     $entidad           = isset($_POST['entidad']) ? $_POST['entidad'] : '';
@@ -140,7 +193,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $email_personal    = isset($_POST["email_personal"]) ? $_POST["email_personal"] : '';
     $email_corporativo = isset($_POST["email_corporativo"]) ? $_POST["email_corporativo"] : '';
     $medio             = isset($_POST["medio"]) ? $_POST["medio"] : '';
-
 
     // --- Soporte de pago (opcional) ---
     $soporte_rel = ''; // guardaremos ruta relativa: "uploads/soportes/archivo.ext"
@@ -178,34 +230,25 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
     }
 
-
+    // INSERT manteniendo `nombre` + nuevos campos `nombres` y `apellidos`
     $stmt = $conn->prepare("INSERT INTO inscritos (
-        evento_id, tipo_inscripcion, nombre, cedula, cargo, entidad, celular, ciudad,
+        evento_id, tipo_inscripcion, nombre, nombres, apellidos, cedula, cargo, entidad, celular, ciudad,
         email_personal, email_corporativo, medio, soporte_pago
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("isssssssssss",
-        $evento_id, $tipo_inscripcion, $nombre, $cedula, $cargo, $entidad, $celular, $ciudad,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("isssssssssssss",
+        $evento_id, $tipo_inscripcion, $nombre, $nombres, $apellidos, $cedula, $cargo, $entidad, $celular, $ciudad,
         $email_personal, $email_corporativo, $medio, $soporte_rel
     );
-
 
     if ($stmt->execute()) {
         // --- Armar datos del correo ---
         $es_presencial = (strtolower($evento['modalidad']) === 'presencial');
 
-        /**
-         * Nombre correcto del PDF según lo que definimos en el proyecto:
-         * "GUIA HOTELERA 2025 - Cafam.pdf"
-         *
-         * Y la ruta correcta es a nivel del proyecto, no del archivo.
-         * Como este archivo está en una subcarpeta, usamos dirname(__DIR__)
-         * para subir un nivel y luego /docs/...
-         */
+        // PDF adjunto (solo presencial)
         $path_pdf = null;
         if ($es_presencial) {
             $pdf_nombre = 'GUIA HOTELERA 2025 - Cafam.pdf';
             $path_pdf_candidato = dirname(__DIR__) . '/docs/' . $pdf_nombre;
-
             if (is_file($path_pdf_candidato)) {
                 $path_pdf = $path_pdf_candidato;
             } else {
@@ -213,10 +256,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             }
         }
 
-        // === FIRMA: ruta de archivo en el servidor para embeber por CID ===
+        // FIRMA: ruta de archivo en el servidor para embeber por CID
         $firma_file = '';
         if (!empty($evento['firma_imagen'])) {
-            $tmp = dirname(__DIR__) . '/uploads/firmas/' . $evento['firma_imagen']; // ruta física
+            $tmp = dirname(__DIR__) . '/uploads/firmas/' . $evento['firma_imagen'];
             if (file_exists($tmp)) {
                 $firma_file = $tmp;
             } else {
@@ -242,17 +285,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $datosCorreo = array(
             // Evento
-            'evento_id'        => (int)$evento['id'], // <-- IMPORTANTE para completar whatsapp/firma si faltan
+            'evento_id'        => (int)$evento['id'],
             'nombre_evento'    => $evento['nombre'],
             'modalidad'        => $evento['modalidad'],
             'fecha_limite'     => $evento['fecha_limite'],
             'resumen_fechas'   => $resumen_fechas,
             'detalle_horario'  => $detalle_horario,
-            'url_imagen'       => $img_file,              // para addEmbeddedImage
-            'url_imagen_public'=> $img_pub,               // por si quieres referenciar URL
+            'url_imagen'       => $img_file,               // para addEmbeddedImage
+            'url_imagen_public'=> $img_pub,                // por si quieres referenciar URL
             'adjunto_pdf'      => $path_pdf,
-            'firma_file'       => $firma_file,                 // ruta física de la firma para embeber
-            'encargado_nombre' => $evento['encargado_nombre'], // nombre que va debajo
+            'firma_file'       => $firma_file,             // ruta física de la firma para embeber
+            'encargado_nombre' => $evento['encargado_nombre'],
             'lugar'            => $es_presencial ? "Centro de Convenciones Cafam Floresta<br>Av. Cra. 68 No. 90-88, Bogotá - Salón Sauces" : "",
 
             // Encabezado “Señores:”
@@ -267,7 +310,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         $correo = new CorreoDenuncia();
         $correo->sendConfirmacionInscripcion($nombre, $email_corporativo, $datosCorreo);
-        // === Avisar al comercial asignado al evento ===
+
+        // === Aviso al comercial asignado al evento ===
         $com_email = '';
         $com_nombre = '';
         $eid = (int)$evento['id'];
@@ -289,7 +333,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
 
         if (!empty($com_email)) {
-            // Ensamblar datos del aviso (usamos los mismos nombres ya existentes)
             $aviso = array(
                 'evento_id'        => $eid,
                 'nombre_evento'    => $evento['nombre'],
@@ -305,16 +348,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 'email_personal'   => $email_personal,
                 'email_corporativo'=> $email_corporativo,
                 'medio'            => $medio,
-                'soporte_pago'     => $soporte_rel   // ← NUEVO: ruta relativa si el inscrito subió soporte
+                'soporte_pago'     => $soporte_rel
             );
-
-            // Enviar aviso (no interrumpe el flujo si falla)
             $okAviso = $correo->sendAvisoNuevaInscripcion($com_email, $aviso);
             if (!$okAviso) {
                 error_log('[AVISO_COMERCIAL] Falló el envío al comercial: ' . $com_email);
             }
         }
-
 
         $mensaje_exito = true;
     } else {
@@ -352,7 +392,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         </div>
       <?php endif; ?>
 
-        <form method="POST" onsubmit="return validarFormulario()" enctype="multipart/form-data" class="space-y-4">
+      <form method="POST" onsubmit="return validarFormulario()" enctype="multipart/form-data" class="space-y-4">
         <input type="hidden" name="evento_id" value="<?php echo (int)$evento['id']; ?>">
 
         <div class="flex gap-4">
@@ -364,7 +404,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           </label>
         </div>
 
-        <input type="text" name="nombre" placeholder="Nombre completo" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
+        <!-- NUEVOS CAMPOS -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input id="nombres" name="nombres" type="text" placeholder="Nombres" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
+          <input id="apellidos" name="apellidos" type="text" placeholder="Apellidos" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
+        </div>
+
         <input type="text" name="cedula" placeholder="Cédula" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
         <input type="text" name="cargo" placeholder="Cargo" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
         <input type="text" name="entidad" id="entidad" placeholder="Entidad o Empresa" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
@@ -409,6 +454,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       }
       return true;
     }
+
     // ========== ENTIDAD → MAYÚSCULAS (sin arrow functions) ==========
     (function () {
       var entidad = document.getElementById('entidad');
@@ -416,7 +462,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       entidad.addEventListener('input', function () {
         var start = this.selectionStart, end = this.selectionEnd;
         var v = this.value || '';
-        // Mayúsculas simples; respetamos posición del cursor
         this.value = v.toUpperCase();
         if (typeof start === 'number' && typeof end === 'number') {
           this.setSelectionRange(start, end);
@@ -427,13 +472,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // ========== NOMBRES / APELLIDOS → Título (sin arrow ni \p{L}) ==========
     (function () {
       function toTitleCase(str) {
-        // 1) a minúsculas
         str = (str || '').toLowerCase();
-        // 2) separa por espacios y guiones, conservando separadores
         var parts = str.split(/(\s+|-)/);
         for (var i = 0; i < parts.length; i++) {
           var s = parts[i];
-          // si no es separador, capitaliza
           if (s && !/^\s+$/.test(s) && s !== '-') {
             parts[i] = s.charAt(0).toUpperCase() + s.slice(1);
           }
@@ -457,13 +499,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       bindTitleCase('apellidos');
     })();
 
-    // ========== Cerrar modal y redirigir (definida en global) ==========
+    // ========== Cerrar modal y redirigir ==========
     function cerrarModalGracias() {
-      // Oculta modal si tienes un id (opcional)
       var modal = document.getElementById('modalGracias');
       if (modal) modal.classList.add('hidden');
-      // Redirige
       window.location.href = "https://fycconsultores.com/inicio";
     }
   </script>
+</body>
 </html>
