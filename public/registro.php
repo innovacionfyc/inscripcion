@@ -99,6 +99,45 @@ $detalle_horario = !empty($fechas) ? detalleHorarioHtml($fechas) : '<em>Pronto t
 
 $mensaje_exito = false;
 
+<?php
+// --- Helper MAYÚSCULAS compatible con PHP antiguo (sin mbstring) ---
+if (!function_exists('strtoupper_utf8')) {
+    function strtoupper_utf8($texto) {
+        // Normaliza espacios
+        $texto = trim($texto);
+        // Sube a mayúsculas base (ASCII)
+        $upper = strtoupper($texto);
+        // Corrige tildes y caracteres comunes en ES
+        // (agrega más pares si lo necesitas)
+        $map = array(
+            'á'=>'Á','é'=>'É','í'=>'Í','ó'=>'Ó','ú'=>'Ú',
+            'à'=>'À','è'=>'È','ì'=>'Ì','ò'=>'Ò','ù'=>'Ù',
+            'ä'=>'Ä','ë'=>'Ë','ï'=>'Ï','ö'=>'Ö','ü'=>'Ü',
+            'ñ'=>'Ñ','ç'=>'Ç'
+        );
+        // Reemplaza SOLO si el original tenía minúsculas acentuadas
+        // Esto evita dañar cadenas ya en mayúscula.
+        $upper = strtr($upper, $map);
+
+        // Limpieza opcional de espacios múltiples
+        $upper = preg_replace('/\s+/u', ' ', $upper);
+        return $upper;
+    }
+}
+
+// --- Lectura segura del POST (ENTIDAD en MAYÚSCULAS) ---
+$entidad = isset($_POST['entidad']) ? $_POST['entidad'] : '';
+// Si sospechas que llega en ISO-8859-1 desde algún navegador antiguo, descomenta:
+// if (!preg_match('//u', $entidad)) { $entidad = iconv('ISO-8859-1', 'UTF-8//IGNORE', $entidad); }
+
+$entidad = strtoupper_utf8($entidad);
+
+// Ejemplo de uso en tu INSERT con mysqli (ajusta a tus variables)
+/// $stmt = $conn->prepare("INSERT INTO inscritos (..., entidad, ...) VALUES (..., ?, ...)");
+/// $stmt->bind_param('s', $entidad);
+/// $stmt->execute();
+
+
 // -----------------------------
 // 4) POST: guardar inscripción + correo
 // -----------------------------
@@ -108,7 +147,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $nombre            = isset($_POST["nombre"]) ? $_POST["nombre"] : '';
     $cedula            = isset($_POST["cedula"]) ? $_POST["cedula"] : '';
     $cargo             = isset($_POST["cargo"]) ? $_POST["cargo"] : '';
-    $entidad           = isset($_POST["entidad"]) ? $_POST["entidad"] : '';
+    $entidad           = isset($_POST['entidad']) ? $_POST['entidad'] : '';
+    $entidad           = strtoupper_utf8($entidad);
     $celular           = isset($_POST["celular"]) ? $_POST["celular"] : '';
     $ciudad            = isset($_POST["ciudad"]) ? $_POST["ciudad"] : '';
     $email_personal    = isset($_POST["email_personal"]) ? $_POST["email_personal"] : '';
@@ -341,7 +381,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <input type="text" name="nombre" placeholder="Nombre completo" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
         <input type="text" name="cedula" placeholder="Cédula" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
         <input type="text" name="cargo" placeholder="Cargo" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
-        <input type="text" name="entidad" placeholder="Entidad o Empresa" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
+        <input type="text" name="entidad" id="entidad" placeholder="Entidad o Empresa" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
         <input type="text" name="celular" placeholder="Celular" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
         <input type="text" name="ciudad" placeholder="Ciudad" required class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
         <input type="email" name="email_personal" placeholder="Email Personal (opcional)" class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
@@ -392,5 +432,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         window.location.href = "https://fycconsultores.com/inicio";
       }
 
+    (function () {
+      const entidad = document.getElementById('entidad');
+      if (entidad) {
+        entidad.addEventListener('input', function () {
+          const start = this.selectionStart;
+          const end = this.selectionEnd;
+          this.value = this.value.toUpperCase();
+          this.setSelectionRange(start, end);
+        });
+      }
+    })();
+
+    function strtoupper_utf8($texto) {
+        $texto = strtoupper($texto);
+        // reemplazo manual de tildes
+        $map = array(
+            'á'=>'Á','é'=>'É','í'=>'Í','ó'=>'Ó','ú'=>'Ú',
+            'ñ'=>'Ñ','ü'=>'Ü'
+        );
+        return strtr($texto, $map);
+    }
   </script>
 </html>
