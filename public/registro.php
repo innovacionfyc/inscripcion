@@ -99,7 +99,6 @@ $detalle_horario = !empty($fechas) ? detalleHorarioHtml($fechas) : '<em>Pronto t
 
 $mensaje_exito = false;
 
-<?php
 // --- Helper MAYÚSCULAS compatible con PHP antiguo (sin mbstring) ---
 if (!function_exists('strtoupper_utf8')) {
     function strtoupper_utf8($texto) {
@@ -124,19 +123,6 @@ if (!function_exists('strtoupper_utf8')) {
         return $upper;
     }
 }
-
-// --- Lectura segura del POST (ENTIDAD en MAYÚSCULAS) ---
-$entidad = isset($_POST['entidad']) ? $_POST['entidad'] : '';
-// Si sospechas que llega en ISO-8859-1 desde algún navegador antiguo, descomenta:
-// if (!preg_match('//u', $entidad)) { $entidad = iconv('ISO-8859-1', 'UTF-8//IGNORE', $entidad); }
-
-$entidad = strtoupper_utf8($entidad);
-
-// Ejemplo de uso en tu INSERT con mysqli (ajusta a tus variables)
-/// $stmt = $conn->prepare("INSERT INTO inscritos (..., entidad, ...) VALUES (..., ?, ...)");
-/// $stmt->bind_param('s', $entidad);
-/// $stmt->execute();
-
 
 // -----------------------------
 // 4) POST: guardar inscripción + correo
