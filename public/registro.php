@@ -370,6 +370,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <meta charset="UTF-8">
   <title>Formulario de Inscripción</title>
   <link rel="stylesheet" href="../assets/css/output.css">
+  <link rel="preload" href="../assets/img/loader-buho.gif" as="image">
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
   <div class="w-full max-w-2xl bg-white rounded-2xl shadow-2xl p-8 mt-6">
@@ -392,7 +393,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         </div>
       <?php endif; ?>
 
-      <form method="POST" onsubmit="return validarFormulario()" enctype="multipart/form-data" class="space-y-4">
+        <form method="POST" onsubmit="return preEnviar(event)" enctype="multipart/form-data" class="space-y-4">
         <input type="hidden" name="evento_id" value="<?php echo (int)$evento['id']; ?>">
 
         <div class="flex gap-4">
@@ -427,6 +428,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           Enviar inscripción
         </button>
       </form>
+      <!-- LOADER OVERLAY con GIF -->
+      <div id="loaderOverlay"
+           style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:9999;">
+        <div style="background:#fff;padding:22px 26px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);text-align:center;max-width:340px;">
+          <img src="../assets/img/loader-buho.gif" alt="Cargando…" style="width:140px;height:auto;display:block;margin:0 auto 10px;">
+          <div style="font-weight:700;color:#111827;margin-bottom:4px;">Enviando tu inscripción…</div>
+          <div style="font-size:13px;color:#6b7280;">Por favor espera, esto puede tardar algunos segundos.</div>
+        </div>
+      </div>
     <?php else: ?>
       <p class="text-red-600 text-center text-lg font-bold">⚠️ Evento no encontrado</p>
     <?php endif; ?>
@@ -453,6 +463,31 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         return false;
       }
       return true;
+    }
+
+    // Bloquea doble envío, muestra overlay y usa el GIF también dentro del botón
+    function preEnviar(evt) {
+      // 1) Validación existente
+      if (typeof validarFormulario === 'function') {
+        if (!validarFormulario()) {
+          if (evt && evt.preventDefault) evt.preventDefault();
+          return false;
+        }
+      }
+
+      // 2) Deshabilitar botón + mostrar GIF en el botón
+      var btn = document.querySelector('button[type="submit"]');
+      if (btn) {
+        btn.disabled = true;
+        btn.className += ' opacity-70 cursor-not-allowed';
+        btn.innerHTML = '<img src="../assets/img/loader-buho.gif" alt="" style="height:20px;width:auto;vertical-align:middle;margin-right:8px;"> Enviando…';
+      }
+
+      // 3) Mostrar overlay con el búho
+      var overlay = document.getElementById('loaderOverlay');
+      if (overlay) overlay.style.display = 'flex';
+
+      return true; // continuar con el submit
     }
 
     // ========== ENTIDAD → MAYÚSCULAS (sin arrow functions) ==========
