@@ -410,6 +410,55 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       return true;
     }
 
+      <scrip>
+      // ========== ENTIDAD → MAYÚSCULAS (sin arrow functions) ==========
+      (function () {
+        var entidad = document.getElementById('entidad');
+        if (!entidad) return;
+        entidad.addEventListener('input', function () {
+          var start = this.selectionStart, end = this.selectionEnd;
+          var v = this.value || '';
+          // Mayúsculas simples; respetamos posición del cursor
+          this.value = v.toUpperCase();
+          if (typeof start === 'number' && typeof end === 'number') {
+            this.setSelectionRange(start, end);
+          }
+        });
+      })();
+
+      // ========== NOMBRES / APELLIDOS → Título (sin arrow ni \p{L}) ==========
+      (function () {
+        function toTitleCase(str) {
+          // 1) a minúsculas
+          str = (str || '').toLowerCase();
+          // 2) separa por espacios y guiones, conservando separadores
+          var parts = str.split(/(\s+|-)/);
+          for (var i = 0; i < parts.length; i++) {
+            var s = parts[i];
+            // si no es separador, capitaliza
+            if (s && !/^\s+$/.test(s) && s !== '-') {
+              parts[i] = s.charAt(0).toUpperCase() + s.slice(1);
+            }
+          }
+          return parts.join('');
+        }
+        function bindTitleCase(id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('input', function () {
+            var pos = this.selectionStart;
+            var val = this.value || '';
+            var nuevo = toTitleCase(val);
+            if (nuevo !== val) {
+              this.value = nuevo;
+              if (typeof pos === 'number') this.setSelectionRange(pos, pos);
+            }
+          });
+        }
+        bindTitleCase('nombres');
+        bindTitleCase('apellidos');
+      })();
+
       function cerrarModalGracias() {
         // si quieres ver el cierre del modal antes de salir:
         var m = document.getElementById('modalGracias');
@@ -417,27 +466,5 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         // redirigir a la web principal
         window.location.href = "https://fycconsultores.com/inicio";
       }
-
-    (function () {
-      const entidad = document.getElementById('entidad');
-      if (entidad) {
-        entidad.addEventListener('input', function () {
-          const start = this.selectionStart;
-          const end = this.selectionEnd;
-          this.value = this.value.toUpperCase();
-          this.setSelectionRange(start, end);
-        });
-      }
-    })();
-
-    function strtoupper_utf8($texto) {
-        $texto = strtoupper($texto);
-        // reemplazo manual de tildes
-        $map = array(
-            'á'=>'Á','é'=>'É','í'=>'Í','ó'=>'Ó','ú'=>'Ú',
-            'ñ'=>'Ñ','ü'=>'Ü'
-        );
-        return strtr($texto, $map);
-    }
   </script>
 </html>
