@@ -22,8 +22,6 @@ if ($resUsuarios && $resUsuarios->num_rows > 0) {
     }
 }
 
-
-
 // === Helper: guardarAdjuntos (múltiples archivos) ===
 // Compatible con PHP viejito (maneja tanto inputs [] como uno solo)
 if (!function_exists('guardarAdjuntos')) {
@@ -73,7 +71,6 @@ if (!function_exists('guardarAdjuntos')) {
         return $moved;
     }
 }
-
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $nombre           = $_POST["nombre"] ?? '';
@@ -253,7 +250,6 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         <small class="text-gray-500">Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB c/u.</small>
       </div>
 
-
       <div>
         <label class="font-semibold text-gray-700">Fecha límite para confirmar asistencia:</label>
         <input type="date" name="fecha_limite" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
@@ -269,6 +265,7 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
 
   <script src="../assets/js/jquery.min.js"></script>
   <script>
+    // ===== Adjuntos por modalidad (aislado) =====
     (function () {
       function fycGetModalidad() {
         var sel = document.querySelector('select[name="modalidad"], #modalidad');
@@ -302,6 +299,63 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         document.addEventListener('DOMContentLoaded', fycBindAdjuntos);
       } else {
         fycBindAdjuntos();
+      }
+    })();
+
+    // ===== Generador de días/horarios (aislado) =====
+    (function () {
+      function byId(id){ return document.getElementById(id); }
+
+      function renderDias() {
+        var sel  = byId('num_dias');
+        var wrap = byId('dias_container');
+        if (!sel || !wrap) return;
+
+        var n = parseInt(sel.value, 10);
+        if (!n || n < 1) { wrap.innerHTML = ''; return; }
+
+        // Guardar valores existentes para no perderlos al cambiar n
+        var old = [];
+        var rows = wrap.getElementsByClassName('fyc-dia-row');
+        for (var i = 0; i < rows.length; i++) {
+          var f  = rows[i].querySelector('input[name="fechas[]"]');
+          var hi = rows[i].querySelector('input[name="hora_inicio[]"]');
+          var hf = rows[i].querySelector('input[name="hora_fin[]"]');
+          old.push({f: f ? f.value : '', hi: hi ? hi.value : '', hf: hf ? hf.value : ''});
+        }
+
+        var html = '';
+        for (var j = 0; j < n; j++) {
+          var ov = old[j] || {f:'',hi:'',hf:''};
+          html += ''
+          + '<div class="fyc-dia-row grid grid-cols-1 md:grid-cols-3 gap-3">'
+            + '<div>'
+              + '<label class="block text-sm font-medium mb-1">Fecha día ' + (j+1) + '</label>'
+              + '<input type="date" name="fechas[]" value="' + ov.f + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '</div>'
+            + '<div>'
+              + '<label class="block text-sm font-medium mb-1">Hora inicio</label>'
+              + '<input type="time" name="hora_inicio[]" value="' + ov.hi + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '</div>'
+            + '<div>'
+              + '<label class="block text-sm font-medium mb-1">Hora fin</label>'
+              + '<input type="time" name="hora_fin[]" value="' + ov.hf + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '</div>'
+          + '</div>';
+        }
+        wrap.innerHTML = html;
+      }
+
+      function bindDias() {
+        var sel = byId('num_dias');
+        if (sel) sel.addEventListener('change', renderDias);
+        renderDias(); // inicial por si ya tiene valor
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindDias);
+      } else {
+        bindDias();
       }
     })();
 
