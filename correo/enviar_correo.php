@@ -301,6 +301,55 @@ class CorreoDenuncia {
         }
     }
 
+    // === ADJUNTOS AUTOMÁTICOS POR TIPO (virtual/presencial) ===
+    // Directorios candidatos (por evento y global)
+    $tryDirs = array();
+    $baseDocs = dirname(__DIR__) . '/docs';
+
+    $modalidadLow = isset($data['modalidad']) ? strtolower($data['modalidad']) : '';
+    $eid = isset($data['evento_id']) ? (int)$data['evento_id'] : 0;
+
+    if ($modalidadLow === 'virtual') {
+        if ($eid > 0) $tryDirs[] = $baseDocs . '/evento_virtual/' . $eid; // por evento (recomendado)
+        $tryDirs[] = $baseDocs . '/evento_virtual';                        // global
+    } elseif ($modalidadLow === 'presencial') {
+        if ($eid > 0) $tryDirs[] = $baseDocs . '/evento_presencial/' . $eid; // por evento (recomendado)
+        $tryDirs[] = $baseDocs . '/evento_presencial';                        // global
+    }
+
+    // Extensiones permitidas (agrega más si necesitas)
+    $permitidas = array('pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','gif','webp');
+    $maxAdjuntos = 20;   // tope sano
+    $adjCount = 0;
+
+    foreach ($tryDirs as $dir) {
+        if ($adjCount >= $maxAdjuntos) break;
+        if (!is_dir($dir)) continue;
+
+        // listado simple de archivos (no recursivo)
+        $files = @glob($dir . '/*');
+        if (!$files) continue;
+
+        foreach ($files as $abs) {
+            if ($adjCount >= $maxAdjuntos) break;
+            if (!is_file($abs)) continue;
+
+            $ext = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
+            if (!in_array($ext, $permitidas)) continue;
+
+            // (opcional) descartar archivos enormes
+            $size = @filesize($abs);
+            if ($size !== false && $size > 25 * 1024 * 1024) { // 25MB
+                error_log('[ADJUNTOS_AUTO] Archivo muy grande, omitido: ' . $abs);
+                continue;
+            }
+
+            $mail->addAttachment($abs, basename($abs));
+            $adjCount++;
+        }
+    }
+
+
     // ---------------------------------------------------------------------
     // Aviso interno al comercial: nueva inscripción (adjunta soporte si existe)
     // ---------------------------------------------------------------------

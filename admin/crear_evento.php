@@ -22,6 +22,59 @@ if ($resUsuarios && $resUsuarios->num_rows > 0) {
     }
 }
 
+
+
+// === Helper: guardarAdjuntos (múltiples archivos) ===
+// Compatible con PHP viejito (maneja tanto inputs [] como uno solo)
+if (!function_exists('guardarAdjuntos')) {
+    function guardarAdjuntos($inputName, $destDir) {
+        $permitidas = array('pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','gif','webp');
+        if (!isset($_FILES[$inputName])) return 0;
+
+        // Crea la carpeta destino si no existe
+        if (!is_dir($destDir)) { @mkdir($destDir, 0775, true); }
+
+        $moved = 0;
+
+        // Unificar a arrays (por si no usaron [])
+        $names = $_FILES[$inputName]['name'];
+        $tmps  = $_FILES[$inputName]['tmp_name'];
+        $errs  = $_FILES[$inputName]['error'];
+        $sizes = $_FILES[$inputName]['size'];
+
+        if (!is_array($names)) {
+            $names = array($names);
+            $tmps  = array($tmps);
+            $errs  = array($errs);
+            $sizes = array($sizes);
+        }
+
+        for ($i=0; $i<count($names); $i++) {
+            if ($errs[$i] !== UPLOAD_ERR_OK) continue;
+            $tmp  = $tmps[$i];
+            $name = $names[$i];
+            $size = (int)$sizes[$i];
+
+            if (!is_uploaded_file($tmp)) continue;
+
+            $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+            if (!in_array($ext, $permitidas)) continue;
+
+            // Límite 25MB por archivo
+            if ($size > 25 * 1024 * 1024) continue;
+
+            // Nombre seguro + único
+            $seguro = preg_replace('/[^A-Za-z0-9_\-\.]/','_', $name);
+            $seguro = date('Ymd_His') . '_' . mt_rand(1000,9999) . '_' . $seguro;
+
+            @move_uploaded_file($tmp, rtrim($destDir,'/').'/'.$seguro) && $moved++;
+        }
+
+        return $moved;
+    }
+}
+
+
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $nombre           = $_POST["nombre"] ?? '';
     $slug             = generarSlug($nombre);
@@ -64,6 +117,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $stmt_fecha->execute();
             }
             $stmt_fecha->close();
+        }
+
+        // === ADJUNTOS POR MODALIDAD → docs/evento_{virtual|presencial}/{evento_id}/ ===
+        $baseDocs = dirname(__DIR__) . '/docs';
+        $modLow   = strtolower(trim($modalidad));
+
+        if ($modLow === 'virtual') {
+            // Input <input type="file" name="docs_virtual[]" multiple>
+            $dest = $baseDocs . '/evento_virtual/' . (int)$evento_id;
+            guardarAdjuntos('docs_virtual', $dest);
+        } elseif ($modLow === 'presencial') {
+            // Input <input type="file" name="docs_presencial[]" multiple>
+            $dest = $baseDocs . '/evento_presencial/' . (int)$evento_id;
+            guardarAdjuntos('docs_presencial', $dest);
         }
 
         $conn->close();
@@ -170,6 +237,21 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         </select>
       </div>
 
+      <!-- Subida de docs para VIRTUAL -->
+      <div id="docs_virtual_wrap" style="display:none; margin-top:12px;">
+        <label><strong>Adjuntos para evento virtual</strong></label>
+        <input type="file" name="docs_virtual[]" multiple>
+        <small>Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB por archivo.</small>
+      </div>
+
+      <!-- Subida de docs para PRESENCIAL -->
+      <div id="docs_presencial_wrap" style="display:none; margin-top:12px;">
+        <label><strong>Adjuntos para evento presencial</strong></label>
+        <input type="file" name="docs_presencial[]" multiple>
+        <small>Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB por archivo.</small>
+      </div>
+
+
       <div>
         <label class="font-semibold text-gray-700">Fecha límite para confirmar asistencia:</label>
         <input type="date" name="fecha_limite" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
@@ -185,6 +267,19 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
 
   <script src="../assets/js/jquery.min.js"></script>
   <script>
+     // mostrar/ocultar inputs según modalidad
+    (function(){
+      function toggleWrap() {
+        var mod = document.querySelector('input[name="modalidad"]:checked');
+        var v = mod ? mod.value.toLowerCase() : '';
+        document.getElementById('docs_virtual_wrap').style.display = (v === 'virtual') ? 'block' : 'none';
+        document.getElementById('docs_presencial_wrap').style.display = (v === 'presencial') ? 'block' : 'none';
+      }
+      var radios = document.querySelectorAll('input[name="modalidad"]');
+      for (var i=0;i<radios.length;i++){ radios[i].addEventListener('change', toggleWrap); }
+      toggleWrap();
+    })();
+
     $('#num_dias').on('change', function () {
       var num = parseInt(this.value || 0, 10);
       var container = $('#dias_container');
