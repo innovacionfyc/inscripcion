@@ -199,22 +199,21 @@ class CorreoDenuncia {
                 $encabezado .= "</p>";
             }
 
-            // Botón de WhatsApp
+            // Botón de WhatsApp (aparece si hay número, sin importar modalidad)
             $btnWhatsapp = '';
             $waNum = !empty($data['whatsapp_numero']) ? preg_replace('/\D/', '', $data['whatsapp_numero']) : '';
             if (empty($waNum) && !empty($comWaDb)) { $waNum = $comWaDb; }
-
             if (!empty($waNum)) {
                 $txt = rawurlencode('Hola, tengo una consulta sobre el evento ' . ($data['nombre_evento'] ?? ''));
-                $btnWhatsapp = '<p style="margin:16px 0 0">
+                $btnWhatsapp = '<p style="margin:16px 0 0; text-align:center;">
                     <a href="https://wa.me/'.$waNum.'?text='.$txt.'" target="_blank"
-                       style="display:inline-block;background:#25D366;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">
+                       style="display:inline-block;background:#25D366;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:bold">
                       💬 Escribir por WhatsApp
                     </a>
                   </p>';
             }
 
-            // Firma (preferir CID; si no, URL)
+            // Firma (preferir CID; si no, URL) — AUMENTADA
             $firmaHtml   = '';
             $firmaImgTag = '';
             $encargadoNombre = !empty($data['encargado_nombre']) ? $data['encargado_nombre'] : ($comNombre ?: '');
@@ -223,9 +222,10 @@ class CorreoDenuncia {
                 $cidFirma = 'firma_' . md5($data['firma_file']);
                 $mime = function_exists('mime_content_type') ? mime_content_type($data['firma_file']) : 'image/png';
                 $mail->addEmbeddedImage($data['firma_file'], $cidFirma, basename($data['firma_file']), 'base64', $mime);
-                $firmaImgTag = "<img src='cid:{$cidFirma}' alt='Firma' style='width:300px; height:auto; display:block; margin:10px auto 0;'>";
+                // ⬇️ AUMENTÉ el tamaño de la firma
+                $firmaImgTag = "<img src='cid:{$cidFirma}' alt='Firma' style='width:360px; height:auto; display:block; margin:10px auto 0;'>";
             } elseif (!empty($data['firma_url_public'])) {
-                $firmaImgTag = '<img src="'.htmlspecialchars($data['firma_url_public'], ENT_QUOTES, 'UTF-8').'" alt="Firma" style="width:300px; height:auto; display:block; margin:10px auto 0;">';
+                $firmaImgTag = '<img src="'.htmlspecialchars($data['firma_url_public'], ENT_QUOTES, 'UTF-8').'" alt="Firma" style="width:360px; height:auto; display:block; margin:10px auto 0;">';
             }
 
             if ($firmaImgTag || $encargadoNombre) {
@@ -235,23 +235,28 @@ class CorreoDenuncia {
                            . '</div>';
             }
 
-            // HTML final
+            // ====== HTML final ======
+            // Cambios solicitados:
+            // - Título del evento: NEGRO, NEGRITA, MÁS GRANDE y CENTRADO
             $html = "
             <div style='font-family:Arial, Helvetica, sans-serif;background:#f6f7fb;padding:24px'>
               <div style='max-width:700px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden'>
                 {$bannerImg}
-                <div style='padding:28px; font-size:15px; color:#222'>
 
+                <div style='padding:24px 24px 0 24px'>
+                  <h1 style='margin:0 0 8px 0; color:#000000; font-size:24px; line-height:1.35; font-weight:700; text-align:center;'>".$nombreEvento."</h1>
+                  <p style='margin:0 0 16px 0; text-align:center; color:#6b7280; font-size:14px;'>".$modalidadTxt.( $resumenFechas ? " · ".$resumenFechas : "" )."</p>
+                </div>
+
+                <div style='padding:0 28px 28px 28px; font-size:15px; color:#222'>
                   {$encabezado}
 
                   <p style='margin:0 0 10px'>Gracias por sumarse a este espacio de aprendizaje. Su inscripción ha sido confirmada. A continuación, encontrará los detalles del evento:</p>
 
-                  <h3 style='margin:0 0 14px;color:#d32f57;font-size:20px'>".$nombreEvento."</h3>
-
                   <p style='margin:0 0 12px'><strong>Modalidad:</strong> ".$modalidadTxt."</p>
 
                   <p style='margin:0 0 6px'><strong>📌 Fecha y Horario</strong></p>
-                  <p style='margin:0 0 8px'>📅 ".$resumenFechas."</p>
+                  ".($resumenFechas ? "<p style='margin:0 0 8px'>📅 ".$resumenFechas."</p>" : "")."
                   <div style='margin:8px 0 18px; padding:14px; background:#fafafa; border:1px solid #eee; border-radius:10px;'>
                     ".$detalleHorario."
                   </div>
