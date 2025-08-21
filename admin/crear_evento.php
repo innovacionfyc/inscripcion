@@ -270,40 +270,41 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
   <script src="../assets/js/jquery.min.js"></script>
   <script>
     (function () {
-      function getModalidad() {
-        // 1) select
+      function fycGetModalidad() {
         var sel = document.querySelector('select[name="modalidad"], #modalidad');
         if (sel && typeof sel.value !== 'undefined') {
           return String(sel.value || '').toLowerCase();
         }
-        // 2) radios
-        var checked = document.querySelector('input[name="modalidad"]:checked');
-        if (checked) return String(checked.value || '').toLowerCase();
-        return '';
+        var r = document.querySelector('input[name="modalidad"]:checked');
+        return r ? String(r.value || '').toLowerCase() : '';
       }
 
-      function toggleWrap() {
-        var v = getModalidad();
+      function fycToggleAdjuntos() {
+        var v = fycGetModalidad();
         var vWrap = document.getElementById('docs_virtual_wrap');
         var pWrap = document.getElementById('docs_presencial_wrap');
         if (vWrap) vWrap.style.display = (v === 'virtual') ? 'block' : 'none';
         if (pWrap) pWrap.style.display = (v === 'presencial') ? 'block' : 'none';
       }
 
-      // Escuchar cambios del select (si existe)
-      var sel = document.querySelector('select[name="modalidad"], #modalidad');
-      if (sel) sel.addEventListener('change', toggleWrap);
+      function fycBindAdjuntos() {
+        var sel = document.querySelector('select[name="modalidad"], #modalidad');
+        if (sel) sel.addEventListener('change', fycToggleAdjuntos);
 
-      // Escuchar cambios de radios (por si acaso)
-      var radios = document.querySelectorAll('input[name="modalidad"]');
-      for (var i = 0; i < radios.length; i++) {
-        radios[i].addEventListener('change', toggleWrap);
+        var radios = document.querySelectorAll('input[name="modalidad"]');
+        for (var i = 0; i < radios.length; i++) {
+          radios[i].addEventListener('change', fycToggleAdjuntos);
+        }
+        fycToggleAdjuntos(); // inicial
       }
 
-      // Ejecutar al cargar
-      toggleWrap();
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', fycBindAdjuntos);
+      } else {
+        fycBindAdjuntos();
+      }
     })();
-    
+
     function copiarURL() {
       var input = document.getElementById('urlFormulario');
       var msg   = document.getElementById('mensajeCopiado');
