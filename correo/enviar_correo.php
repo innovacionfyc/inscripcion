@@ -225,7 +225,8 @@ class CorreoDenuncia {
                 // ⬇️ AUMENTÉ el tamaño de la firma
                 $firmaImgTag = "<img src='cid:{$cidFirma}' alt='Firma' width='520' style='width:100%; max-width:520px; height:auto; display:block; margin:12px auto 0;'>";
             } elseif (!empty($data['firma_url_public'])) {
-            $firmaImgTag = '<img src="'.htmlspecialchars($data['firma_url_public'], ENT_QUOTES, 'UTF-8').'" alt="Firma" width="520" style="width:100%; max-width:520px; height:auto; display:block; margin:12px auto 0;">';
+                $firmaImgTag = '<img src="'.htmlspecialchars($data['firma_url_public'], ENT_QUOTES, 'UTF-8').'" alt="Firma" width="520" style="width:100%; max-width:520px; height:auto; display:block; margin:12px auto 0;">';
+            }
             if ($firmaImgTag || $encargadoNombre) {
                 $firmaHtml = '<div style="margin-top:18px; text-align:center;">'
                            . ($encargadoNombre ? '<div style="font-weight:bold;margin-bottom:6px;">'.htmlspecialchars($encargadoNombre, ENT_QUOTES, 'UTF-8').'</div>' : '')
