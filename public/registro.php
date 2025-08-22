@@ -383,29 +383,29 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         Inscripción al evento: <?php echo htmlspecialchars($evento['nombre'], ENT_QUOTES, 'UTF-8'); ?>
       </h1>
 
-      <?php if ($mensaje_exito): ?>
-        <div id="modalGracias" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div class="bg-white p-6 rounded-2xl shadow-2xl text-center max-w-md w-full">
-            <h2 class="text-xl font-bold text-[#942934] mb-4">🎉 ¡Inscripción exitosa!</h2>
-            <p class="text-gray-700 mb-4">
-              Gracias por registrarte. Hemos enviado un correo de confirmación a tu email corporativo.
-            </p>
+        <?php if ($mensaje_exito): ?>
+          <div id="modalGracias" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-6 rounded-2xl shadow-2xl text-center"
+                 style="max-width:520px;width:92%;">
+              <h2 class="text-xl font-bold text-[#942934] mb-4">🎉 ¡Inscripción exitosa!</h2>
+              <p class="text-gray-700 mb-4">
+                Gracias por registrarte. Hemos enviado un correo de confirmación a tu email corporativo.
+              </p>
 
-            <!-- Contenedor de acciones: apilado en móvil, lado a lado en pantallas medianas -->
-            <div class="mt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <button type="button" onclick="otraInscripcion()"
-                      class="bg-[#0ea5e9] text-white px-6 py-2 rounded-xl hover:bg-[#0284c7] transition-all">
-                Realizar otra inscripción
-              </button>
-              <button type="button" onclick="cerrarModalGracias()"
-                      class="bg-[#d32f57] text-white px-6 py-2 rounded-xl hover:bg-[#942934] transition-all">
-                Ir al inicio
-              </button>
+              <!-- Acciones: usamos inline-style para evitar purgado -->
+              <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:8px;">
+                <button type="button" onclick="otraInscripcion()"
+                        style="background:#0ea5e9;color:#fff;padding:10px 18px;border-radius:12px;font-weight:600;">
+                  Realizar otra inscripción
+                </button>
+                <button type="button" onclick="cerrarModalGracias()"
+                        style="background:#d32f57;color:#fff;padding:10px 18px;border-radius:12px;font-weight:600;">
+                  Ir al inicio
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-
-      <?php endif; ?>
+        <?php endif; ?>
 
         <form method="POST" onsubmit="return preEnviar(event)" enctype="multipart/form-data" class="space-y-4">
         <input type="hidden" name="evento_id" value="<?php echo (int)$evento['id']; ?>">
