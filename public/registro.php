@@ -374,8 +374,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <link rel="preload" href="../assets/img/loader-buho.gif" as="image">
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
-    <div class="w-full max-w-2xl bg-white rounded-2xl shadow-2xl p-8 mt-6">
-      <div class="mx-auto w-full max-w-md sm:max-w-lg md:max-w-2xl lg:max-w-4xl bg-white rounded-2xl shadow-2xl p-4 md:p-6 lg:p-8">
+    <div class="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 py-6">
+      <div class="mx-auto w-full max-w-md sm:max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl
+    bg-white rounded-2xl shadow-2xl p-4 md:p-6 lg:p-8">
 
     <?php if ($evento): ?>
       <img src="<?php echo htmlspecialchars('../uploads/eventos/' . $evento['imagen'], ENT_QUOTES, 'UTF-8'); ?>" alt="Imagen del evento" class="w-full h-48 md:h-64 lg:h-72 xl:h-80 object-cover rounded-xl mb-4 md:mb-6">
