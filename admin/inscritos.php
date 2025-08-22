@@ -8,12 +8,34 @@ require_login();
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
 
-/* ====== ROL DEL USUARIO (admin/editor) ====== */
-$rol = '';
-if (isset($_SESSION['user']['role']))       $rol = $_SESSION['user']['role'];
-elseif (isset($_SESSION['user']['rol']))    $rol = $_SESSION['user']['rol'];
-elseif (isset($_SESSION['role']))           $rol = $_SESSION['role'];
-$es_admin = (strtolower((string)$rol) === 'admin');
+/* ====== Helper de rol robusto ====== */
+function fyc_is_admin_from_session() {
+  $cands = array(
+    // posibles ubicaciones del rol
+    isset($_SESSION['user']['role']) ? $_SESSION['user']['role'] : null,
+    isset($_SESSION['user']['rol'])  ? $_SESSION['user']['rol']  : null,
+    isset($_SESSION['role'])         ? $_SESSION['role']         : null,
+    isset($_SESSION['rol'])          ? $_SESSION['rol']          : null,
+    isset($_SESSION['user']['perfil']) ? $_SESSION['user']['perfil'] : null,
+    isset($_SESSION['perfil'])         ? $_SESSION['perfil']         : null,
+  );
+
+  // si hay un flag booleano/tipo entero
+  if (isset($_SESSION['user']['is_admin']) && ($_SESSION['user']['is_admin'] === true || $_SESSION['user']['is_admin'] === 1 || $_SESSION['user']['is_admin'] === '1')) {
+    return true;
+  }
+
+  foreach ($cands as $r) {
+    if (!isset($r)) continue;
+    $v = strtolower(trim((string)$r));
+    if ($v === 'admin' || $v === 'administrator' || $v === 'administrador' || $v === 'superadmin' || $v === 'super') {
+      return true;
+    }
+  }
+  return false;
+}
+
+$es_admin = fyc_is_admin_from_session();
 
 $evento_id = isset($_GET['evento_id']) ? (int)$_GET['evento_id'] : 0;
 if ($evento_id <= 0) {

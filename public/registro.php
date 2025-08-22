@@ -374,10 +374,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   <link rel="preload" href="../assets/img/loader-buho.gif" as="image">
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
-    <div class="w-full max-w-md sm:max-w-2xl bg-white rounded-2xl shadow-2xl p-4 sm:p-8 mt-4 sm:mt-6">
+    <div class="w-full max-w-xl md:max-w-2xl lg:max-w-3xl bg-white rounded-2xl shadow-2xl p-4 md:p-6 lg:p-8 mt-4 md:mt-6">
 
     <?php if ($evento): ?>
-      <img src="<?php echo htmlspecialchars('../uploads/eventos/' . $evento['imagen'], ENT_QUOTES, 'UTF-8'); ?>" alt="Imagen del evento" class="w-full h-40 sm:h-60 object-cover rounded-xl mb-4 sm:mb-6">
+      <img src="<?php echo htmlspecialchars('../uploads/eventos/' . $evento['imagen'], ENT_QUOTES, 'UTF-8'); ?>" alt="Imagen del evento" class="w-full h-48 md:h-64 lg:h-72 object-cover rounded-xl mb-4 md:mb-6">
       <h1 class="text-2xl font-bold text-[#942934] mb-4 text-center">
         Inscripción al evento: <?php echo htmlspecialchars($evento['nombre'], ENT_QUOTES, 'UTF-8'); ?>
       </h1>
