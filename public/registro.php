@@ -385,18 +385,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       <?php if ($mensaje_exito): ?>
         <div id="modalGracias" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div class="bg-white p-6 rounded-2xl shadow-2xl text-center max-w-md">
+          <div class="bg-white p-6 rounded-2xl shadow-2xl text-center max-w-md w-full">
             <h2 class="text-xl font-bold text-[#942934] mb-4">🎉 ¡Inscripción exitosa!</h2>
-            <p class="text-gray-700 mb-4">Gracias por registrarte. Hemos enviado un correo de confirmación a tu email corporativo.</p>
-            <button onclick="otraInscripcion()"
-                    class="bg-[#0ea5e9] text-white px-6 py-2 rounded-xl hover:bg-[#0284c7] transition-all">
-              Realizar otra inscripción
-            </button>
-            <button onclick="cerrarModalGracias()" class="bg-[#d32f57] text-white px-6 py-2 rounded-xl hover:bg-[#942934] transition-all">
-              Cerrar
-            </button>
+            <p class="text-gray-700 mb-4">
+              Gracias por registrarte. Hemos enviado un correo de confirmación a tu email corporativo.
+            </p>
+
+            <!-- Contenedor de acciones: apilado en móvil, lado a lado en pantallas medianas -->
+            <div class="mt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button type="button" onclick="otraInscripcion()"
+                      class="bg-[#0ea5e9] text-white px-6 py-2 rounded-xl hover:bg-[#0284c7] transition-all">
+                Realizar otra inscripción
+              </button>
+              <button type="button" onclick="cerrarModalGracias()"
+                      class="bg-[#d32f57] text-white px-6 py-2 rounded-xl hover:bg-[#942934] transition-all">
+                Ir al inicio
+              </button>
+            </div>
           </div>
         </div>
+
       <?php endif; ?>
 
         <form method="POST" onsubmit="return preEnviar(event)" enctype="multipart/form-data" class="space-y-4">
@@ -541,16 +549,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       bindTitleCase('apellidos');
     })();
 
-    // ========== Cerrar modal y redirigir ==========
-    function cerrarModalGracias() {
-      var modal = document.getElementById('modalGracias');
-      if (modal) modal.classList.add('hidden');
-      window.location.href = "https://fycconsultores.com/inicio";
-    }
+      // Cerrar modal y enviar a inicio
+      function cerrarModalGracias() {
+        var modal = document.getElementById('modalGracias');
+        if (modal) modal.classList.add('hidden');
+        window.location.href = "https://fycconsultores.com/inicio";
+      }
 
+      // Slug actual desde PHP o, si no viene, desde la URL
       var SLUG_ACTUAL = "<?php echo isset($slug) ? addslashes($slug) : ''; ?>";
+      if (!SLUG_ACTUAL) {
+        var m = location.search.match(/[?&]e=([^&]+)/);
+        if (m) { try { SLUG_ACTUAL = decodeURIComponent(m[1].replace(/\+/g,' ')); } catch(e){} }
+      }
+
+      // Volver a abrir el formulario limpio del mismo evento
       function otraInscripcion() {
-        // recarga en GET el mismo formulario para limpiar el POST y mostrar el form vacío
         window.location.href = "registro.php?e=" + encodeURIComponent(SLUG_ACTUAL);
       }
   </script>
