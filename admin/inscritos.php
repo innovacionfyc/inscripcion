@@ -8,6 +8,13 @@ require_login();
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
 
+/* ====== ROL DEL USUARIO (admin/editor) ====== */
+$rol = '';
+if (isset($_SESSION['user']['role']))       $rol = $_SESSION['user']['role'];
+elseif (isset($_SESSION['user']['rol']))    $rol = $_SESSION['user']['rol'];
+elseif (isset($_SESSION['role']))           $rol = $_SESSION['role'];
+$es_admin = (strtolower((string)$rol) === 'admin');
+
 $evento_id = isset($_GET['evento_id']) ? (int)$_GET['evento_id'] : 0;
 if ($evento_id <= 0) {
   http_response_code(400);
@@ -15,8 +22,14 @@ if ($evento_id <= 0) {
   exit;
 }
 
-// Eliminar inscrito (POST)
+/* ====== Eliminar inscrito (solo ADMIN) ====== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['accion'] === 'eliminar') {
+  if (!$es_admin) { // bloqueo de seguridad
+    http_response_code(403);
+    echo "No autorizado";
+    exit;
+  }
+
   $inscrito_id = isset($_POST['inscrito_id']) ? (int)$_POST['inscrito_id'] : 0;
   if ($inscrito_id > 0) {
     // (Opcional) borrar archivo soporte si quieres
@@ -40,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
   exit;
 }
 
-// Info del evento
+/* ====== Info del evento ====== */
 $evento = null;
 $stmtE = $conn->prepare("SELECT e.nombre, e.slug, e.modalidad, e.fecha_limite, u.nombre AS comercial
                          FROM eventos e
@@ -67,7 +80,7 @@ if (!$evento) {
   exit;
 }
 
-// Inscritos
+/* ====== Inscritos ====== */
 $inscritos = array();
 $stmt = $conn->prepare("SELECT id, tipo_inscripcion, nombre, cedula, cargo, entidad, celular, ciudad, email_personal, email_corporativo, medio, soporte_pago
                         FROM inscritos
@@ -150,7 +163,6 @@ $stmt->close();
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['tipo_inscripcion'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3">
                     <?php if (!empty($r['soporte_pago'])):
-                          // URL absoluta desde la raíz del sitio (sin /public)
                           $url = '/' . ltrim($r['soporte_pago'], '/');
                           $abs = rtrim($_SERVER['DOCUMENT_ROOT'],'/') . '/' . ltrim($r['soporte_pago'],'/');
                           $existe = is_file($abs);
@@ -168,13 +180,17 @@ $stmt->close();
                   <?php endif; ?>
                 </td>
                 <td class="py-2 pr-3">
-                  <a href="editar_inscrito.php?id=<?php echo (int)$r['id']; ?>&evento_id=<?php echo $evento_id; ?>"
-                     class="inline-block bg-sky-600 hover:bg-sky-700 text-white px-3 py-1 rounded-lg">Editar</a>
-                  <form method="POST" class="inline-block ml-2" onsubmit="return confirm('¿Eliminar este inscrito?');">
-                    <input type="hidden" name="accion" value="eliminar">
-                    <input type="hidden" name="inscrito_id" value="<?php echo (int)$r['id']; ?>">
-                    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg">Eliminar</button>
-                  </form>
+                  <?php if ($es_admin): ?>
+                    <a href="editar_inscrito.php?id=<?php echo (int)$r['id']; ?>&evento_id=<?php echo $evento_id; ?>"
+                       class="inline-block bg-sky-600 hover:bg-sky-700 text-white px-3 py-1 rounded-lg">Editar</a>
+                    <form method="POST" class="inline-block ml-2" onsubmit="return confirm('¿Eliminar este inscrito?');">
+                      <input type="hidden" name="accion" value="eliminar">
+                      <input type="hidden" name="inscrito_id" value="<?php echo (int)$r['id']; ?>">
+                      <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg">Eliminar</button>
+                    </form>
+                  <?php else: ?>
+                    <span class="text-gray-400">—</span>
+                  <?php endif; ?>
                 </td>
               </tr>
             <?php endforeach; ?>

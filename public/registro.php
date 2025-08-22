@@ -368,15 +368,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>Formulario de Inscripción</title>
   <link rel="stylesheet" href="../assets/css/output.css">
   <link rel="preload" href="../assets/img/loader-buho.gif" as="image">
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
-  <div class="w-full max-w-2xl bg-white rounded-2xl shadow-2xl p-8 mt-6">
+    <div class="w-full max-w-md sm:max-w-2xl bg-white rounded-2xl shadow-2xl p-4 sm:p-8 mt-4 sm:mt-6">
 
     <?php if ($evento): ?>
-      <img src="<?php echo htmlspecialchars('../uploads/eventos/' . $evento['imagen'], ENT_QUOTES, 'UTF-8'); ?>" alt="Imagen del evento" class="w-full h-60 object-cover rounded-xl mb-6">
+      <img src="<?php echo htmlspecialchars('../uploads/eventos/' . $evento['imagen'], ENT_QUOTES, 'UTF-8'); ?>" alt="Imagen del evento" class="w-full h-40 sm:h-60 object-cover rounded-xl mb-4 sm:mb-6">
       <h1 class="text-2xl font-bold text-[#942934] mb-4 text-center">
         Inscripción al evento: <?php echo htmlspecialchars($evento['nombre'], ENT_QUOTES, 'UTF-8'); ?>
       </h1>
@@ -386,6 +387,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <div class="bg-white p-6 rounded-2xl shadow-2xl text-center max-w-md">
             <h2 class="text-xl font-bold text-[#942934] mb-4">🎉 ¡Inscripción exitosa!</h2>
             <p class="text-gray-700 mb-4">Gracias por registrarte. Hemos enviado un correo de confirmación a tu email corporativo.</p>
+            <button onclick="otraInscripcion()"
+                    class="bg-[#0ea5e9] text-white px-6 py-2 rounded-xl hover:bg-[#0284c7] transition-all">
+              Realizar otra inscripción
+            </button>
             <button onclick="cerrarModalGracias()" class="bg-[#d32f57] text-white px-6 py-2 rounded-xl hover:bg-[#942934] transition-all">
               Cerrar
             </button>
@@ -424,7 +429,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <p class="text-sm text-gray-500 -mt-2">Soporte de Asistencia Opcional (PDF o imagen - máx. 10 MB).</p>
         <input type="text" name="medio" placeholder="¿Por qué medio se enteró?" class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
 
-        <button type="submit" class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 px-6 rounded-xl w-full transition-all duration-300 hover:scale-[1.01] active:scale-[0.98]">
+        <button type="submit" class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 px-4 sm:px-6 rounded-xl w-full transition-all duration-300 hover:scale-[1.01] active:scale-[0.98]">
           Enviar inscripción
         </button>
       </form>
@@ -540,6 +545,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       if (modal) modal.classList.add('hidden');
       window.location.href = "https://fycconsultores.com/inicio";
     }
+
+      var SLUG_ACTUAL = "<?php echo isset($slug) ? addslashes($slug) : ''; ?>";
+      function otraInscripcion() {
+        // recarga en GET el mismo formulario para limpiar el POST y mostrar el form vacío
+        window.location.href = "registro.php?e=" + encodeURIComponent(SLUG_ACTUAL);
+      }
   </script>
 </body>
 </html>

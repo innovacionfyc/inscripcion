@@ -37,3 +37,23 @@ if (!function_exists('log_activity')) {
     }
   }
 }
+
+function fyc_current_role() {
+    if (isset($_SESSION['user']['role'])) return $_SESSION['user']['role'];
+    if (isset($_SESSION['user']['rol']))  return $_SESSION['user']['rol'];
+    if (isset($_SESSION['role']))         return $_SESSION['role'];
+    return '';
+}
+
+function require_any_role($roles = array()) {
+    require_login();
+    $role = fyc_current_role();
+    if (!in_array($role, $roles, true)) {
+        http_response_code(403);
+        echo "No autorizado";
+        exit;
+    }
+}
+
+// Helper por si quieres consultarlo en vistas
+function is_admin() { return fyc_current_role() === 'admin'; }
