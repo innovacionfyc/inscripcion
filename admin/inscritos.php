@@ -8,6 +8,7 @@ require_login();
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
 require_once dirname(__DIR__) . '/correo/enviar_correo.php';
+date_default_timezone_set('America/Bogota');
 
 /* ====== Helper de rol robusto ====== */
 function fyc_is_admin_from_session()
@@ -485,7 +486,7 @@ $stmt->close();
                   <?php
                   if (!empty($r['fecha_registro'])) {
                     $ts = strtotime($r['fecha_registro']);
-                    echo $ts ? date('d/m/Y H:i', $ts) : '—';
+                    echo $ts ? date('d/m/Y g:i a', $ts) : '—'; // ej: 14/09/2025 3:27 pm
                   } else {
                     echo '—';
                   }

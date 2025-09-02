@@ -2,6 +2,7 @@
 // admin/evento_export_xls.php  (compatible con PHP antiguo)
 require_once __DIR__ . '/_auth.php';
 require_login();
+date_default_timezone_set('America/Bogota');
 
 // ✅ Conexión a la BD: sube un nivel y entra a /db/
 require_once dirname(__DIR__) . '/db/conexion.php';
@@ -202,7 +203,7 @@ echo "\xEF\xBB\xBF";
       $fecha_txt = '';
       if (!empty($f_reg)) {
         $ts = strtotime($f_reg);
-        $fecha_txt = $ts ? date('d/m/Y H:i', $ts) : '';
+        $fecha_txt = $ts ? date('d/m/Y g:i a', $ts) : '';
       }
       ?>
       <tr>
