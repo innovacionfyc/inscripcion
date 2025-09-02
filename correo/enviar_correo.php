@@ -228,6 +228,74 @@ class CorreoDenuncia
             $detalleHorario = isset($data['detalle_horario']) ? $data['detalle_horario'] : '';
             $fechaLimite = isset($data['fecha_limite']) ? $data['fecha_limite'] : '';
 
+            // --- Si el usuario eligió "por módulos", mostrar solo esos días en el bloque de horario ---
+            $detalleHorarioFinal = $detalleHorario;
+
+            if (
+                !empty($data['evento_id'])
+                && !empty($data['asistencia_tipo'])
+                && strtoupper($data['asistencia_tipo']) === 'MODULOS'
+                && !empty($data['modulos_fechas'])
+            ) {
+
+                // Aseguramos conexión
+                if (!isset($conn) || !($conn instanceof mysqli)) {
+                    if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof mysqli) {
+                        $conn = $GLOBALS['conn'];
+                    } else {
+                        @require_once dirname(__DIR__) . '/db/conexion.php';
+                        if ((!isset($conn) || !($conn instanceof mysqli)) && isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof mysqli) {
+                            $conn = $GLOBALS['conn'];
+                        }
+                    }
+                }
+
+                // Leemos todas las fechas del evento y filtramos por las seleccionadas
+                $selMap = array();
+                $csv = explode(',', $data['modulos_fechas']);  // 'YYYY-mm-dd,YYYY-mm-dd'
+                foreach ($csv as $d) {
+                    $d = trim($d);
+                    if ($d !== '')
+                        $selMap[$d] = true;
+                }
+
+                $rowsSel = array();
+                if (isset($conn) && $conn instanceof mysqli) {
+                    if ($stf = $conn->prepare("SELECT fecha, hora_inicio, hora_fin FROM eventos_fechas WHERE evento_id = ? ORDER BY fecha ASC")) {
+                        $eid = (int) $data['evento_id'];
+                        $stf->bind_param('i', $eid);
+                        if ($stf->execute()) {
+                            $stf->bind_result($f, $hi, $hf);
+                            while ($stf->fetch()) {
+                                if (isset($selMap[$f])) {
+                                    $rowsSel[] = array('fecha' => $f, 'hora_inicio' => $hi, 'hora_fin' => $hf);
+                                }
+                            }
+                        }
+                        $stf->close();
+                    }
+                }
+
+                // Formatear UL solo con los módulos elegidos (igual estilo que el original)
+                if (!empty($rowsSel)) {
+                    $meses = array('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre');
+                    $ul = "<ul style='margin:0;padding-left:18px'>";
+                    for ($i = 0; $i < count($rowsSel); $i++) {
+                        $r = $rowsSel[$i];
+                        $d = (int) date('j', strtotime($r['fecha']));
+                        $m = $meses[(int) date('n', strtotime($r['fecha'])) - 1];
+                        $y = date('Y', strtotime($r['fecha']));
+                        $hi = date('g:i a', strtotime($r['fecha'] . ' ' . $r['hora_inicio']));
+                        $hf = date('g:i a', strtotime($r['fecha'] . ' ' . $r['hora_fin']));
+                        $hi = str_replace(array('am', 'pm'), array('a. m.', 'p. m.'), strtolower($hi));
+                        $hf = str_replace(array('am', 'pm'), array('a. m.', 'p. m.'), strtolower($hf));
+                        $ul .= "<li>Día " . ($i + 1) . ": $d de $m de $y — <strong>$hi</strong> a <strong>$hf</strong></li>";
+                    }
+                    $ul .= "</ul>";
+                    $detalleHorarioFinal = $ul;
+                }
+            }
+
             // --- NUEVO: Asistencia (curso completo vs módulos) ---
             $asistHtml = '';
             $altAsist = '';
@@ -339,9 +407,9 @@ class CorreoDenuncia
 
                   <p style='margin:0 0 6px'><strong>📌 Fecha y Horario</strong></p>
                   " . ($resumenFechas ? "<p style='margin:0 0 8px'>📅 " . $resumenFechas . "</p>" : "") . "
-                  <div style='margin:8px 0 18px; padding:14px; background:#fafafa; border:1px solid #eee; border-radius:10px;'>
-                    " . $detalleHorario . "
-                  </div>
+                <div style='margin:8px 0 18px; padding:14px; background:#fafafa; border:1px solid #eee; border-radius:10px;'>
+                  " . $detalleHorarioFinal . "
+                </div>
 
                   " . $lugarHtml . "
 

@@ -416,6 +416,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       // 🔹 NUEVOS CAMPOS
       'asistencia_tipo' => $asistencia_tipo,     // 'COMPLETO' o 'MODULOS'
       'modulos_texto' => $modulos_human,       // ej: "Día 1 (04/09/2025), Día 3 (06/09/2025)"
+      'modulos_fechas' => $modulos_csv,
       'whatsapp_consent' => $whatsapp_consent     // 'SI' o 'NO'
     );
 
