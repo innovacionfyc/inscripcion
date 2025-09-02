@@ -197,7 +197,7 @@ $stmt->close();
 </head>
 
 <body class="bg-gray-100 min-h-screen">
-  <div class="max-w-6xl mx-auto px-4 py-6">
+  <div class="max-w-screen-2xl mx-auto px-4 py-6">
     <?php
     $back_to = 'eventos.php';
     $show_back = true;
@@ -214,7 +214,7 @@ $stmt->close();
     </p>
 
     <div class="bg-white rounded-2xl shadow-2xl p-5 overflow-x-auto">
-      <table class="min-w-full text-sm">
+      <table class="min-w-full text-xs md:text-sm">
         <thead>
           <tr class="text-left border-b">
             <th class="py-2 pr-3">#</th>
@@ -245,11 +245,12 @@ $stmt->close();
                 <td class="py-2 pr-3"><?php echo $n++; ?></td>
                 <td class="py-2 pr-3 font-medium"><?php echo htmlspecialchars($r['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['cedula'], ENT_QUOTES, 'UTF-8'); ?></td>
-                <td class="py-2 pr-3"><?php echo htmlspecialchars($r['entidad'], ENT_QUOTES, 'UTF-8'); ?></td>
+                <td class="py-2 pr-3 whitespace-normal break-words">
+                  <?php echo htmlspecialchars($r['entidad'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['cargo'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['ciudad'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['celular'], ENT_QUOTES, 'UTF-8'); ?></td>
-                <td class="py-2 pr-3">
+                <td class="py-2 pr-3 break-all">
                   <?php echo htmlspecialchars($r['email_corporativo'] ?: $r['email_personal'], ENT_QUOTES, 'UTF-8'); ?>
                 </td>
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['tipo_inscripcion'], ENT_QUOTES, 'UTF-8'); ?></td>
