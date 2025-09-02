@@ -557,7 +557,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
           <?php $esVirtual = (strtolower($evento['modalidad']) === 'virtual'); ?>
           <?php if ($esVirtual && !empty($fechas)): ?>
-            <div class="p-4 border border-gray-200 rounded-xl">
+            <div class="p-4 border-gray-200 rounded-xl">
               <div class="font-semibold text-gray-800 mb-2">Asistencia</div>
 
               <label class="inline-flex items-center gap-2 mr-4">
@@ -593,7 +593,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <?php endif; ?>
           <input type="file" name="soporte_pago" accept=".pdf,image/*"
             class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
-          <p class="text-sm text-gray-500 -mt-2">Soporte de Asistencia Opcional (PDF o imagen - máx. 10 MB).</p>
+          <p class="text-sm text-black-500 -mt-2">Soporte de Asistencia Opcional (PDF o imagen - máx. 10 MB).</p>
           <!-- Consentimiento WhatsApp -->
           <div class="p-4 border border-gray-200 rounded-xl">
             <div class="font-semibold text-gray-800 mb-2">
