@@ -557,7 +557,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
           <?php $esVirtual = (strtolower($evento['modalidad']) === 'virtual'); ?>
           <?php if ($esVirtual && !empty($fechas)): ?>
-            <div class="p-4 border-gray-200 rounded-xl">
+            <div class="p-4 border border-gray-300 rounded-xl">
               <div class="font-semibold text-gray-800 mb-2">Asistencia</div>
 
               <label class="inline-flex items-center gap-2 mr-4">
