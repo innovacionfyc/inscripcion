@@ -143,15 +143,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
         }
         $stmtF->close();
 
-        // Resumen/Detalle horario
+        /* === AJUSTE CLAVE: filtrar fechas si es virtual + asistencia por módulos === */
+        $esVirtual = (isset($evento['modalidad']) && strtolower($evento['modalidad']) === 'virtual');
+        $usarFiltrado = $esVirtual && strtoupper((string) $asistencia_tipo) === 'MODULOS' && !empty($modulos_csv);
+
+        $fechas_base = $fechas;
+        if ($usarFiltrado) {
+          $modsSet = array();
+          foreach (explode(',', $modulos_csv) as $v) {
+            $v = trim($v);
+            if ($v !== '') {
+              $modsSet[$v] = true;
+            }
+          }
+          $fechas_filtradas = array();
+          foreach ($fechas as $f) {
+            if (isset($modsSet[$f['fecha']])) {
+              $fechas_filtradas[] = $f;
+            }
+          }
+          if (!empty($fechas_filtradas)) {
+            $fechas_base = $fechas_filtradas; // solo módulos seleccionados
+          }
+        }
+
+        // Resumen/Detalle horario (usando $fechas_base)
         $resumen_fechas = '';
-        if (!empty($fechas)) {
+        if (!empty($fechas_base)) {
           $meses = array('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre');
           $dias = array();
-          for ($i = 0; $i < count($fechas); $i++)
-            $dias[] = (int) date('j', strtotime($fechas[$i]['fecha']));
-          $mes = $meses[(int) date('n', strtotime($fechas[0]['fecha'])) - 1];
-          $anio = date('Y', strtotime($fechas[0]['fecha']));
+          for ($i = 0; $i < count($fechas_base); $i++)
+            $dias[] = (int) date('j', strtotime($fechas_base[$i]['fecha']));
+          $mes = $meses[(int) date('n', strtotime($fechas_base[0]['fecha'])) - 1];
+          $anio = date('Y', strtotime($fechas_base[0]['fecha']));
           if (count($dias) == 1) {
             $resumen_fechas = $dias[0] . " de $mes de $anio";
           } else {
@@ -160,11 +184,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
           }
         }
         $detalle_horario = '';
-        if (!empty($fechas)) {
+        if (!empty($fechas_base)) {
           $meses = array('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre');
           $det = "<ul style='margin:0;padding-left:18px'>";
-          for ($i = 0; $i < count($fechas); $i++) {
-            $f = $fechas[$i];
+          for ($i = 0; $i < count($fechas_base); $i++) {
+            $f = $fechas_base[$i];
             $d = (int) date('j', strtotime($f['fecha']));
             $m = $meses[(int) date('n', strtotime($f['fecha'])) - 1];
             $y = date('Y', strtotime($f['fecha']));
@@ -201,14 +225,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
           }
           $firma_url_public = !empty($evento['firma_imagen']) ? base_url('uploads/firmas/' . $evento['firma_imagen']) : '';
 
-          // Texto humano de módulos
+          // Texto humano de módulos (renumerado sobre $fechas_base)
           $modulos_human = '';
           if (strtoupper((string) $asistencia_tipo) === 'MODULOS' && !empty($modulos_csv)) {
-            $mods = explode(',', $modulos_csv);
+            $mods = array();
+            foreach (explode(',', $modulos_csv) as $v) {
+              $v = trim($v);
+              if ($v !== '') {
+                $mods[$v] = true;
+              }
+            }
             $chunks = array();
-            for ($i = 0; $i < count($fechas); $i++) {
-              $f = $fechas[$i]['fecha'];
-              if (in_array($f, $mods, true)) {
+            for ($i = 0; $i < count($fechas_base); $i++) {
+              $f = $fechas_base[$i]['fecha'];
+              if (isset($mods[$f])) {
                 $chunks[] = 'Día ' . ($i + 1) . ' (' . date('d/m/Y', strtotime($f)) . ')';
               }
             }
