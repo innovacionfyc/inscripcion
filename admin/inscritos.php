@@ -35,7 +35,7 @@ function fyc_is_admin_from_session()
 }
 $es_admin = fyc_is_admin_from_session();
 
-/* ====== Helpers para resumen/horario (copias compactas) ====== */
+/* ====== Helpers para fechas ====== */
 function fyc_resumir_fechas($fechasArr)
 {
   if (empty($fechasArr))
@@ -71,6 +71,32 @@ function fyc_detalle_horario_html($fechasArr)
   }
   $html .= "</ul>";
   return $html;
+}
+function fyc_asistencia_humana($asistencia_tipo, $modulos_csv, $fechas_evento)
+{
+  $tipo = strtoupper((string) $asistencia_tipo);
+  if ($tipo !== 'MODULOS')
+    return 'Completo';
+  if (empty($modulos_csv) || empty($fechas_evento))
+    return 'Módulos: —';
+
+  // mapa fecha -> índice (Día N)
+  $idx = array();
+  for ($i = 0; $i < count($fechas_evento); $i++) {
+    $f = $fechas_evento[$i]['fecha'];
+    $idx[$f] = $i + 1;
+  }
+  $mods = explode(',', $modulos_csv);
+  $out = array();
+  foreach ($mods as $f) {
+    $f = trim($f);
+    if (isset($idx[$f])) {
+      $out[] = 'Día ' . $idx[$f] . ' (' . date('d/m', strtotime($f)) . ')';
+    }
+  }
+  if (empty($out))
+    return 'Módulos: —';
+  return 'Módulos: ' . implode(', ', $out);
 }
 
 $evento_id = isset($_GET['evento_id']) ? (int) $_GET['evento_id'] : 0;
@@ -109,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
   exit;
 }
 
-/* ====== REENVIAR correo (ADMIN y no-admin también) ====== */
+/* ====== REENVIAR correo (visible para todos los roles) ====== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['accion'] === 'reenviar') {
   $inscrito_id = isset($_POST['inscrito_id']) ? (int) $_POST['inscrito_id'] : 0;
   $destino_tipo = isset($_POST['destino_tipo']) ? strtolower(trim($_POST['destino_tipo'])) : 'corp';
@@ -117,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
 
   $okReenviar = false;
   if ($inscrito_id > 0) {
-    // 1) Info del inscrito
+    // Inscrito (trae nuevos campos)
     $stmtI = $conn->prepare("SELECT tipo_inscripcion, nombre, cedula, cargo, entidad, celular, ciudad,
                                      email_personal, email_corporativo, medio, soporte_pago,
                                      asistencia_tipo, modulos_seleccionados, whatsapp_consent, fecha_registro
@@ -145,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
     if ($stmtI->fetch()) {
       $stmtI->close();
 
-      // 2) Info del evento
+      // Evento
       $evento = null;
       $stmtE = $conn->prepare("SELECT nombre, imagen, modalidad, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre
                                FROM eventos WHERE id = ? LIMIT 1");
@@ -167,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
       $stmtE->close();
 
       if ($evento) {
-        // 3) Fechas del evento (para resumen/modulos human)
+        // Fechas del evento
         $fechas = array();
         $stmtF = $conn->prepare("SELECT fecha, hora_inicio, hora_fin FROM eventos_fechas WHERE evento_id = ? ORDER BY fecha ASC");
         $stmtF->bind_param("i", $evento_id);
@@ -181,7 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
         $resumen_fechas = !empty($fechas) ? fyc_resumir_fechas($fechas) : '';
         $detalle_horario = !empty($fechas) ? fyc_detalle_horario_html($fechas) : '';
 
-        // 4) Email destino
+        // Destino
         $correoDestino = '';
         if ($destino_tipo === 'otro' && preg_match('/^\S+@\S+\.\S+$/', $email_otro)) {
           $correoDestino = $email_otro;
@@ -192,7 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
         }
 
         if (!empty($correoDestino)) {
-          // 5) Archivos/URLs auxiliares
+          // Archivos/URLs
           $img_file = dirname(__DIR__) . '/uploads/eventos/' . $evento['imagen'];
           $img_pub = base_url('uploads/eventos/' . $evento['imagen']);
           $wa_num = !empty($evento['whatsapp_numero']) ? preg_replace('/\D/', '', $evento['whatsapp_numero']) : '';
@@ -204,7 +230,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
           }
           $firma_url_public = !empty($evento['firma_imagen']) ? base_url('uploads/firmas/' . $evento['firma_imagen']) : '';
 
-          // 6) Texto humano para módulos (si aplica)
+          // Texto human módulos
           $modulos_human = '';
           if (strtoupper($asistencia_tipo) === 'MODULOS' && !empty($modulos_csv)) {
             $mods = explode(',', $modulos_csv);
@@ -218,7 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
             $modulos_human = implode(', ', $chunks);
           }
 
-          // 7) Datos del correo (misma estructura que en registro.php)
+          // Datos correo
           $datosCorreo = array(
             'evento_id' => (int) $evento['id'],
             'nombre_evento' => $evento['nombre'],
@@ -236,8 +262,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
             'entidad_empresa' => $entidad,
             'nombre_inscrito' => $ins_nombre,
             'whatsapp_numero' => $wa_num,
-
-            // nuevos campos
             'asistencia_tipo' => $asistencia_tipo,
             'modulos_texto' => $modulos_human,
           );
@@ -281,16 +305,45 @@ if (!$evento) {
   exit;
 }
 
-/* ====== Inscritos (traemos emails porque los usamos en el botón) ====== */
+/* ====== Fechas del evento (para render de asistencia en tabla) ====== */
+$fechas_evento = array();
+$stmtF = $conn->prepare("SELECT fecha, hora_inicio, hora_fin FROM eventos_fechas WHERE evento_id = ? ORDER BY fecha ASC");
+$stmtF->bind_param("i", $evento_id);
+$stmtF->execute();
+$stmtF->bind_result($f_fecha, $f_hi, $f_hf);
+while ($stmtF->fetch()) {
+  $fechas_evento[] = array('fecha' => $f_fecha, 'hora_inicio' => $f_hi, 'hora_fin' => $f_hf);
+}
+$stmtF->close();
+
+/* ====== Inscritos (incluye campos nuevos) ====== */
 $inscritos = array();
 $stmt = $conn->prepare("SELECT id, tipo_inscripcion, nombre, cedula, cargo, entidad, celular, ciudad,
-                               email_personal, email_corporativo, medio, soporte_pago
+                               email_personal, email_corporativo, medio, soporte_pago,
+                               asistencia_tipo, modulos_seleccionados, whatsapp_consent, fecha_registro
                         FROM inscritos
                         WHERE evento_id = ?
                         ORDER BY id DESC");
 $stmt->bind_param("i", $evento_id);
 $stmt->execute();
-$stmt->bind_result($id, $tipo, $nombre, $cedula, $cargo, $entidad, $celular, $ciudad, $email_p, $email_c, $medio, $soporte);
+$stmt->bind_result(
+  $id,
+  $tipo,
+  $nombre,
+  $cedula,
+  $cargo,
+  $entidad,
+  $celular,
+  $ciudad,
+  $email_p,
+  $email_c,
+  $medio,
+  $soporte,
+  $asistencia_tipo,
+  $modulos_csv,
+  $wa_consent,
+  $fecha_registro
+);
 while ($stmt->fetch()) {
   $inscritos[] = array(
     'id' => $id,
@@ -304,7 +357,11 @@ while ($stmt->fetch()) {
     'email_personal' => $email_p,
     'email_corporativo' => $email_c,
     'medio' => $medio,
-    'soporte_pago' => $soporte
+    'soporte_pago' => $soporte,
+    'asistencia_tipo' => $asistencia_tipo,
+    'modulos_seleccionados' => $modulos_csv,
+    'whatsapp_consent' => $wa_consent,
+    'fecha_registro' => $fecha_registro
   );
 }
 $stmt->close();
@@ -344,7 +401,7 @@ $stmt->close();
     </p>
 
     <div class="bg-white rounded-2xl shadow-2xl p-5 overflow-x-auto">
-      <table class="min-w-[900px] w-full text-sm">
+      <table class="min-w-[1250px] w-full text-sm">
         <thead>
           <tr class="text-left border-b">
             <th class="py-2 pr-3">#</th>
@@ -356,18 +413,25 @@ $stmt->close();
             <th class="py-2 pr-3">Celular</th>
             <th class="py-2 pr-3">Email</th>
             <th class="py-2 pr-3">Tipo</th>
-            <th class="py-2 pr-3">Soporte de Asistencia</th>
+            <th class="py-2 pr-3">Asistencia</th>
+            <th class="py-2 pr-3 whitespace-nowrap">Fecha de inscripción</th>
+            <th class="py-2 pr-3">WhatsApp</th>
+            <th class="py-2 pr-3">Soporte</th>
             <th class="py-2 pr-3">Acciones</th>
           </tr>
         </thead>
         <tbody>
           <?php if (empty($inscritos)): ?>
             <tr>
-              <td colspan="11" class="py-4 text-center text-gray-500">Sin inscritos aún</td>
+              <td colspan="14" class="py-4 text-center text-gray-500">Sin inscritos aún</td>
             </tr>
           <?php else: ?>
             <?php $n = 1;
             foreach ($inscritos as $r): ?>
+              <?php
+              $asist_h = fyc_asistencia_humana($r['asistencia_tipo'], $r['modulos_seleccionados'], $fechas_evento);
+              $email_mostrar = $r['email_corporativo'] ?: $r['email_personal'];
+              ?>
               <tr class="border-b hover:bg-gray-50">
                 <td class="py-2 pr-3"><?php echo $n++; ?></td>
                 <td class="py-2 pr-3 font-medium"><?php echo htmlspecialchars($r['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
@@ -376,10 +440,24 @@ $stmt->close();
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['cargo'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['ciudad'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['celular'], ENT_QUOTES, 'UTF-8'); ?></td>
-                <td class="py-2 pr-3">
-                  <?php echo htmlspecialchars($r['email_corporativo'] ?: $r['email_personal'], ENT_QUOTES, 'UTF-8'); ?>
-                </td>
+                <td class="py-2 pr-3"><?php echo htmlspecialchars($email_mostrar, ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['tipo_inscripcion'], ENT_QUOTES, 'UTF-8'); ?></td>
+
+                <td class="py-2 pr-3"><?php echo htmlspecialchars($asist_h, ENT_QUOTES, 'UTF-8'); ?></td>
+                <td class="py-2 pr-3"><?php echo htmlspecialchars($r['fecha_registro'] ?: '—', ENT_QUOTES, 'UTF-8'); ?></td>
+                <td class="py-2 pr-3">
+                  <?php
+                  $w = strtoupper((string) $r['whatsapp_consent']);
+                  if ($w === 'SI') {
+                    echo '<span class="inline-block bg-green-100 text-green-800 px-2 py-0.5 rounded">SI</span>';
+                  } elseif ($w === 'NO') {
+                    echo '<span class="inline-block bg-red-100 text-red-800 px-2 py-0.5 rounded">NO</span>';
+                  } else {
+                    echo '<span class="inline-block bg-gray-100 text-gray-600 px-2 py-0.5 rounded">—</span>';
+                  }
+                  ?>
+                </td>
+
                 <td class="py-2 pr-3">
                   <?php if (!empty($r['soporte_pago'])):
                     $url = '/' . ltrim($r['soporte_pago'], '/');
@@ -395,11 +473,12 @@ $stmt->close();
                       <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-lg">Ruta inválida</span>
                     <?php endif; ?>
                   <?php else: ?>
-                    <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-lg">Sin soporte</span>
+                    <span class="inline-block bg-gray-100 text-gray-600 px-2 py-1 rounded-lg">Sin soporte</span>
                   <?php endif; ?>
                 </td>
+
                 <td class="py-2 pr-3 whitespace-nowrap">
-                  <!-- Reenviar: disponible para todos -->
+                  <!-- Reenviar (todos los roles) -->
                   <button type="button" class="inline-block bg-teal-600 hover:bg-teal-700 text-white px-3 py-1 rounded-lg"
                     data-id="<?php echo (int) $r['id']; ?>"
                     data-nombre="<?php echo htmlspecialchars($r['nombre'], ENT_QUOTES, 'UTF-8'); ?>"
@@ -418,8 +497,6 @@ $stmt->close();
                       <button type="submit"
                         class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg">Eliminar</button>
                     </form>
-                  <?php else: ?>
-                    <!-- sin acciones admin -->
                   <?php endif; ?>
                 </td>
               </tr>
@@ -482,7 +559,6 @@ $stmt->close();
       document.getElementById('reenviar_inscrito_id').value = id;
       document.getElementById('reenviarNombre').textContent = 'Inscrito: ' + nom;
 
-      // Opciones visibles según existan
       var optC = document.getElementById('optCorp'), labC = document.getElementById('labCorp');
       var optP = document.getElementById('optPers'), labP = document.getElementById('labPers');
 
@@ -492,7 +568,6 @@ $stmt->close();
       if (pers) { optP.classList.remove('hidden'); labP.textContent = pers; }
       else { optP.classList.add('hidden'); labP.textContent = ''; }
 
-      // Radio defaults
       var radios = document.getElementsByName('destino_tipo');
       for (var i = 0; i < radios.length; i++) { radios[i].checked = false; }
       var emailOtro = document.getElementById('email_otro');
@@ -515,7 +590,6 @@ $stmt->close();
       var m = document.getElementById('modalReenviar');
       m.classList.add('hidden'); m.classList.remove('flex');
     }
-    // Habilitar/deshabilitar input "otro" según radio
     (function () {
       var radios = document.getElementsByName('destino_tipo');
       var emailOtro = document.getElementById('email_otro');
@@ -527,7 +601,6 @@ $stmt->close();
       }
       for (var i = 0; i < radios.length; i++) { radios[i].addEventListener('change', toggle); }
     })();
-
     function validarReenvio() {
       var sel = ''; var radios = document.getElementsByName('destino_tipo');
       for (var i = 0; i < radios.length; i++) { if (radios[i].checked) sel = radios[i].value; }
