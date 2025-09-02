@@ -595,7 +595,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
           <p class="text-sm text-black-500 -mt-2">Soporte de Asistencia Opcional (PDF o imagen - máx. 10 MB).</p>
           <!-- Consentimiento WhatsApp -->
-          <div class="p-4 border border-gray-200 rounded-xl">
+          <div class="p-4 border border-gray-300 rounded-xl">
             <div class="font-semibold text-gray-800 mb-2">
               Acepto la vinculación del número celular aquí registrado al grupo de WhatsApp que tendrá como única
               finalidad
