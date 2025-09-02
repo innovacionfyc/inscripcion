@@ -335,8 +335,7 @@ $stmt->close();
     <?php endif; ?>
 
     <h1 class="text-2xl font-bold text-[#942934] mb-2">👥 Inscritos –
-      <?php echo htmlspecialchars($evento['nombre'], ENT_QUOTES, 'UTF-8'); ?>
-    </h1>
+      <?php echo htmlspecialchars($evento['nombre'], ENT_QUOTES, 'UTF-8'); ?></h1>
     <p class="text-sm text-gray-600 mb-6">
       Modalidad: <strong><?php echo htmlspecialchars($evento['modalidad'], ENT_QUOTES, 'UTF-8'); ?></strong> •
       Límite: <strong><?php echo htmlspecialchars($evento['limite'], ENT_QUOTES, 'UTF-8'); ?></strong> •
@@ -377,8 +376,7 @@ $stmt->close();
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['ciudad'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['celular'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3">
-                  <?php echo htmlspecialchars($r['email_corporativo'] ?: $r['email_personal'], ENT_QUOTES, 'UTF-8'); ?>
-                </td>
+                  <?php echo htmlspecialchars($r['email_corporativo'] ?: $r['email_personal'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['tipo_inscripcion'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3">
                   <?php if (!empty($r['soporte_pago'])):
