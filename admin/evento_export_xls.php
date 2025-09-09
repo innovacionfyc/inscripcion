@@ -68,6 +68,7 @@ $sql = "SELECT
           tipo_inscripcion, nombre, cedula, cargo, entidad, celular, ciudad, 
           email_personal, email_corporativo, medio,
           asistencia_tipo, modulos_seleccionados, whatsapp_consent, fecha_registro
+        CONVERT_TZ(fecha_registro, '+00:00', '-05:00') AS fecha_co
         FROM inscritos
         WHERE evento_id = ?
         ORDER BY id ASC";
@@ -174,6 +175,9 @@ echo "\xEF\xBB\xBF";
       <th>Módulos (detalle)</th>
       <th>Consentimiento WhatsApp</th>
       <th>Fecha de inscripción</th>
+      <td class="wrap">
+        <?php echo $fechaCo ? date('d/m/Y g:i a', strtotime($fechaCo)) : ''; ?>
+      </td>
     </tr>
     <?php while ($stmt2->fetch()): ?>
       <?php

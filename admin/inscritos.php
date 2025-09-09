@@ -485,8 +485,14 @@ $stmt->close();
                 <td class="py-2 pr-3">
                   <?php
                   if (!empty($r['fecha_registro'])) {
-                    $ts = strtotime($r['fecha_registro']);
-                    echo $ts ? date('d/m/Y g:i a', $ts) : '—'; // ej: 14/09/2025 3:27 pm
+                    try {
+                      $dt = new DateTime($r['fecha_registro'], new DateTimeZone('UTC')); // si tu BD guarda UTC
+                      $dt->setTimezone(new DateTimeZone('America/Bogota'));
+                      echo $dt->format('d/m/Y g:i a'); // ej: 14/09/2025 3:27 pm
+                    } catch (Exception $e) {
+                      $ts = strtotime($r['fecha_registro']);
+                      echo $ts ? date('d/m/Y g:i a', $ts) : '—';
+                    }
                   } else {
                     echo '—';
                   }
