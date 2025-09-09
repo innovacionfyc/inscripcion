@@ -95,7 +95,6 @@ $stmt2->bind_result(
   $fecha_co
 );
 
-
 // Nombre de archivo “bonito”
 $filename = 'inscritos_' . preg_replace('/[^A-Za-z0-9_-]+/', '_', $evNombre) . '.xls';
 
@@ -178,51 +177,40 @@ echo "\xEF\xBB\xBF";
       <th>Módulos (detalle)</th>
       <th>Consentimiento WhatsApp</th>
       <th>Fecha de inscripción</th>
-      <td class="wrap">
-        <?php
-        // Usar la convertida a -05:00 si viene; si no, la original
-        $src = !empty($fecha_co) ? $fecha_co : $fecha_registro;
+    </tr>
 
-        if (!empty($src) && $src !== '0000-00-00 00:00:00') {
-          echo date('d/m/Y g:i a', strtotime($src)); // formateo am/pm
-        } else {
-          echo '';
+    <?php while ($stmt2->fetch()): ?>
+      <?php
+      // Asistencia humana y módulos detalle
+      $asist_txt = asistencia_humana($asis_tipo, $mods_csv, $fechas_map);
+
+      $mods_txt = '';
+      if (strtoupper((string) $asis_tipo) === 'MODULOS' && !empty($mods_csv)) {
+        $parts = array();
+        foreach (explode(',', $mods_csv) as $v) {
+          $v = trim($v);
+          if ($v === '')
+            continue;
+          $parts[] = isset($fechas_map[$v]) ? $fechas_map[$v] : date('d/m', strtotime($v));
         }
-        ?>
-      </td>
+        $mods_txt = implode(', ', $parts);
+      }
 
+      // Consentimiento
+      $wa_txt = '';
+      if (is_string($wa_consent) && $wa_consent !== '') {
+        $W = strtoupper($wa_consent);
+        $wa_txt = ($W === 'SI' || $W === 'NO') ? $W : '';
+      }
 
-      <?php while ($stmt2->fetch()): ?>
-        <?php
-        // Asistencia humana y módulos detalle
-        $asist_txt = asistencia_humana($asis_tipo, $mods_csv, $fechas_map);
-
-        $mods_txt = '';
-        if (strtoupper((string) $asis_tipo) === 'MODULOS' && !empty($mods_csv)) {
-          $parts = array();
-          foreach (explode(',', $mods_csv) as $v) {
-            $v = trim($v);
-            if ($v === '')
-              continue;
-            $parts[] = isset($fechas_map[$v]) ? $fechas_map[$v] : date('d/m', strtotime($v));
-          }
-          $mods_txt = implode(', ', $parts);
-        }
-
-        // Consentimiento
-        $wa_txt = '';
-        if (is_string($wa_consent) && $wa_consent !== '') {
-          $W = strtoupper($wa_consent);
-          $wa_txt = ($W === 'SI' || $W === 'NO') ? $W : '';
-        }
-
-        // Fecha de inscripción
-        $fecha_txt = '';
-        if (!empty($f_reg)) {
-          $ts = strtotime($f_reg);
-          $fecha_txt = $ts ? date('d/m/Y g:i a', $ts) : '';
-        }
-        ?>
+      // Fecha de inscripción -> usa fecha_co (UTC->-05) si vino; si no, la original
+      $src_fecha = !empty($fecha_co) ? $fecha_co : $fecha_registro;
+      $fecha_txt = '';
+      if (!empty($src_fecha) && $src_fecha !== '0000-00-00 00:00:00') {
+        $ts = strtotime($src_fecha);
+        $fecha_txt = $ts ? date('d/m/Y g:i a', $ts) : '';
+      }
+      ?>
       <tr>
         <td><?php echo htmlspecialchars($tipo, ENT_QUOTES, 'UTF-8'); ?></td>
         <td class="wrap"><?php echo htmlspecialchars($nombre, ENT_QUOTES, 'UTF-8'); ?></td>
