@@ -180,10 +180,17 @@ echo "\xEF\xBB\xBF";
       <th>Fecha de inscripción</th>
       <td class="wrap">
         <?php
-        $fuente = !empty($fecha_co) ? $fecha_co : $fecha_registro; // fallback
-        echo !empty($fuente) ? date('d/m/Y g:i a', strtotime($fuente)) : '';
+        // Usar la convertida a -05:00 si viene; si no, la original
+        $src = !empty($fecha_co) ? $fecha_co : $fecha_registro;
+
+        if (!empty($src) && $src !== '0000-00-00 00:00:00') {
+          echo date('d/m/Y g:i a', strtotime($src)); // formateo am/pm
+        } else {
+          echo '';
+        }
         ?>
       </td>
+
 
       <?php while ($stmt2->fetch()): ?>
         <?php
