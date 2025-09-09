@@ -72,6 +72,7 @@ $sql = "SELECT
 FROM inscritos
 WHERE evento_id = ?
 ORDER BY id ASC";
+
 $stmt2 = $conn->prepare($sql);
 $stmt2->bind_param('i', $id);
 $stmt2->execute();
@@ -90,10 +91,10 @@ $stmt2->bind_result(
   $asis_tipo,
   $mods_csv,
   $wa_consent,
-  $f_reg,
   $fecha_registro,
   $fecha_co
 );
+
 
 // Nombre de archivo “bonito”
 $filename = 'inscritos_' . preg_replace('/[^A-Za-z0-9_-]+/', '_', $evNombre) . '.xls';
@@ -178,40 +179,43 @@ echo "\xEF\xBB\xBF";
       <th>Consentimiento WhatsApp</th>
       <th>Fecha de inscripción</th>
       <td class="wrap">
-        <?php echo $fechaCo ? date('d/m/Y g:i a', strtotime($fechaCo)) : ''; ?>
+        <?php
+        $fuente = !empty($fecha_co) ? $fecha_co : $fecha_registro; // fallback
+        echo !empty($fuente) ? date('d/m/Y g:i a', strtotime($fuente)) : '';
+        ?>
       </td>
-    </tr>
-    <?php while ($stmt2->fetch()): ?>
-      <?php
-      // Asistencia humana y módulos detalle
-      $asist_txt = asistencia_humana($asis_tipo, $mods_csv, $fechas_map);
 
-      $mods_txt = '';
-      if (strtoupper((string) $asis_tipo) === 'MODULOS' && !empty($mods_csv)) {
-        $parts = array();
-        foreach (explode(',', $mods_csv) as $v) {
-          $v = trim($v);
-          if ($v === '')
-            continue;
-          $parts[] = isset($fechas_map[$v]) ? $fechas_map[$v] : date('d/m', strtotime($v));
+      <?php while ($stmt2->fetch()): ?>
+        <?php
+        // Asistencia humana y módulos detalle
+        $asist_txt = asistencia_humana($asis_tipo, $mods_csv, $fechas_map);
+
+        $mods_txt = '';
+        if (strtoupper((string) $asis_tipo) === 'MODULOS' && !empty($mods_csv)) {
+          $parts = array();
+          foreach (explode(',', $mods_csv) as $v) {
+            $v = trim($v);
+            if ($v === '')
+              continue;
+            $parts[] = isset($fechas_map[$v]) ? $fechas_map[$v] : date('d/m', strtotime($v));
+          }
+          $mods_txt = implode(', ', $parts);
         }
-        $mods_txt = implode(', ', $parts);
-      }
 
-      // Consentimiento
-      $wa_txt = '';
-      if (is_string($wa_consent) && $wa_consent !== '') {
-        $W = strtoupper($wa_consent);
-        $wa_txt = ($W === 'SI' || $W === 'NO') ? $W : '';
-      }
+        // Consentimiento
+        $wa_txt = '';
+        if (is_string($wa_consent) && $wa_consent !== '') {
+          $W = strtoupper($wa_consent);
+          $wa_txt = ($W === 'SI' || $W === 'NO') ? $W : '';
+        }
 
-      // Fecha de inscripción
-      $fecha_txt = '';
-      if (!empty($f_reg)) {
-        $ts = strtotime($f_reg);
-        $fecha_txt = $ts ? date('d/m/Y g:i a', $ts) : '';
-      }
-      ?>
+        // Fecha de inscripción
+        $fecha_txt = '';
+        if (!empty($f_reg)) {
+          $ts = strtotime($f_reg);
+          $fecha_txt = $ts ? date('d/m/Y g:i a', $ts) : '';
+        }
+        ?>
       <tr>
         <td><?php echo htmlspecialchars($tipo, ENT_QUOTES, 'UTF-8'); ?></td>
         <td class="wrap"><?php echo htmlspecialchars($nombre, ENT_QUOTES, 'UTF-8'); ?></td>
