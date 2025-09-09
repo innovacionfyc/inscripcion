@@ -67,7 +67,7 @@ function asistencia_humana($tipo, $mods_csv, $fechas_map)
 $sql = "SELECT 
           tipo_inscripcion, nombre, cedula, cargo, entidad, celular, ciudad, 
           email_personal, email_corporativo, medio,
-          asistencia_tipo, modulos_seleccionados, whatsapp_consent, fecha_registro
+          asistencia_tipo, modulos_seleccionados, whatsapp_consent, fecha_registro,
         CONVERT_TZ(fecha_registro, '+00:00', '-05:00') AS fecha_co
         FROM inscritos
         WHERE evento_id = ?
