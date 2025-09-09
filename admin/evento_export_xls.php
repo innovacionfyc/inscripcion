@@ -90,7 +90,9 @@ $stmt2->bind_result(
   $asis_tipo,
   $mods_csv,
   $wa_consent,
-  $f_reg
+  $f_reg,
+  $fecha_registro,
+  $fecha_co
 );
 
 // Nombre de archivo “bonito”
