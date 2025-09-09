@@ -106,8 +106,6 @@ header('Expires: 0');
 
 // Opcional: BOM para que respete tildes en algunos Excel
 echo "\xEF\xBB\xBF";
-
-// HTML que Excel interpreta como hoja
 ?>
 <!DOCTYPE html>
 <html>
@@ -150,6 +148,11 @@ echo "\xEF\xBB\xBF";
 
     .center {
       text-align: center;
+    }
+
+    /* 👇 Forzar 12h con AM/PM en Excel */
+    .dt12 {
+      mso-number-format: "dd/mm/yyyy h:mm AM/PM";
     }
   </style>
 </head>
@@ -203,12 +206,14 @@ echo "\xEF\xBB\xBF";
         $wa_txt = ($W === 'SI' || $W === 'NO') ? $W : '';
       }
 
-      // Fecha de inscripción -> usa fecha_co (UTC->-05) si vino; si no, la original
+      // Fecha de inscripción -> usa fecha_co (UTC->-05) si vino; si no, la original.
+      // Para que Excel lo interprete como fecha, le damos "YYYY-MM-DD HH:MM" (24h),
+      // y el formato .dt12 lo muestra como 12h con AM/PM.
       $src_fecha = !empty($fecha_co) ? $fecha_co : $fecha_registro;
-      $fecha_txt = '';
+      $excel_val = '';
       if (!empty($src_fecha) && $src_fecha !== '0000-00-00 00:00:00') {
         $ts = strtotime($src_fecha);
-        $fecha_txt = $ts ? date('d/m/Y g:i a', $ts) : '';
+        $excel_val = $ts ? date('Y-m-d H:i', $ts) : ''; // <-- valor que Excel sabe convertir
       }
       ?>
       <tr>
@@ -225,7 +230,7 @@ echo "\xEF\xBB\xBF";
         <td class="wrap"><?php echo htmlspecialchars($asist_txt, ENT_QUOTES, 'UTF-8'); ?></td>
         <td class="wrap"><?php echo htmlspecialchars($mods_txt, ENT_QUOTES, 'UTF-8'); ?></td>
         <td class="center"><?php echo htmlspecialchars($wa_txt, ENT_QUOTES, 'UTF-8'); ?></td>
-        <td class="center"><?php echo htmlspecialchars($fecha_txt, ENT_QUOTES, 'UTF-8'); ?></td>
+        <td class="dt12"><?php echo $excel_val; ?></td>
       </tr>
     <?php endwhile; ?>
   </table>
