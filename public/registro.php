@@ -226,7 +226,27 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $ciudad = isset($_POST["ciudad"]) ? $_POST["ciudad"] : '';
   $email_personal = isset($_POST["email_personal"]) ? $_POST["email_personal"] : '';
   $email_corporativo = isset($_POST["email_corporativo"]) ? $_POST["email_corporativo"] : '';
-  $medio = isset($_POST["medio"]) ? $_POST["medio"] : '';
+  // Medio (select + opcional “otro”)
+  $medio_opcion = isset($_POST["medio_opcion"]) ? trim($_POST["medio_opcion"]) : '';
+  $medio_otro = isset($_POST["medio_otro"]) ? trim($_POST["medio_otro"]) : '';
+
+  $mapMedio = array(
+    'CORREO' => 'Correo electrónico',
+    'WHATSAPP' => 'WhatsApp',
+    'LLAMADA' => 'Llamada de nuestros ejecutivos de cuenta',
+    'REDES' => 'Redes sociales',
+    'OTRO' => 'Otro'
+  );
+  if (isset($mapMedio[$medio_opcion])) {
+    if ($medio_opcion === 'OTRO') {
+      $medio = 'Otro' . (!empty($medio_otro) ? (': ' . $medio_otro) : '');
+    } else {
+      $medio = $mapMedio[$medio_opcion];
+    }
+  } else {
+    // fallback por si llega algo raro
+    $medio = '';
+  }
 
   // ===== Asistencia (solo virtual) =====
   $es_virtual = (strtolower($evento['modalidad']) === 'virtual');
@@ -611,8 +631,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               <input type="radio" name="whatsapp_consent" value="NO" class="accent-[#942934]" required> NO
             </label>
           </div>
-          <input type="text" name="medio" placeholder="¿Por qué medio se enteró?"
-            class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
+          <!--           <input type="text" name="medio" placeholder="¿Por qué medio se enteró?"
+            class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" /> -->
+          <div class="p-4 border border-gray-200 rounded-xl">
+            <label for="medio_opcion" class="font-semibold text-gray-800 mb-2 block">¿Por qué medio se enteró?</label>
+
+            <select id="medio_opcion" name="medio_opcion" required class="w-full p-3 border border-gray-300 rounded-xl">
+              <option value="">— Seleccione una opción —</option>
+              <option value="CORREO">Correo electrónico</option>
+              <option value="WHATSAPP">WhatsApp</option>
+              <option value="LLAMADA">Llamada de nuestros ejecutivos de cuenta</option>
+              <option value="REDES">Redes sociales</option>
+              <option value="OTRO">Otro</option>
+            </select>
+
+            <!-- Se muestra solo si el usuario elige “Otro” -->
+            <input id="medio_otro" name="medio_otro" type="text" placeholder="¿Cuál medio?"
+              class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500 mt-3 hidden" />
+          </div>
 
           <button type="submit"
             class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 px-4 sm:px-6 rounded-xl w-full transition-all duration-300 hover:scale-[1.01] active:scale-[0.98]">
@@ -818,6 +854,25 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       // Refuerzo cada cierto tiempo por si hay cambios asíncronos
       setInterval(enviarAltura, 1000);
+    })();
+
+    (function () {
+      var sel = document.getElementById('medio_opcion');
+      var otro = document.getElementById('medio_otro');
+      if (!sel || !otro) return;
+
+      function toggleOtro() {
+        if (sel.value === 'OTRO') {
+          otro.classList.remove('hidden');
+          otro.required = true;
+        } else {
+          otro.classList.add('hidden');
+          otro.required = false;
+          otro.value = '';
+        }
+      }
+      sel.addEventListener('change', toggleOtro);
+      toggleOtro();
     })();
   </script>
 </body>
