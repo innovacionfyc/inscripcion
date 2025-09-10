@@ -786,6 +786,39 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     function otraInscripcion() {
       window.location.href = "registro.php?e=" + encodeURIComponent(SLUG_ACTUAL);
     }
+    // Funcion para que se ajuste en WP
+    (function () {
+      // Solo funciona cuando la página está dentro de un iframe
+      if (window.top === window.self) return;
+
+      function alturaDoc() {
+        const b = document.body, e = document.documentElement;
+        return Math.max(
+          b.scrollHeight, b.offsetHeight, e.clientHeight, e.scrollHeight, e.offsetHeight
+        );
+      }
+
+      function enviarAltura() {
+        // Por simplicidad dejamos '*'; luego lo endurecemos si quieres.
+        parent.postMessage({ type: 'registro:resize', height: alturaDoc() }, '*');
+      }
+
+      // En carga inicial (varias veces por si cambian fuentes/imágenes)
+      window.addEventListener('load', function () {
+        enviarAltura();
+        setTimeout(enviarAltura, 300);
+        setTimeout(enviarAltura, 1200);
+      });
+
+      // Si cambia el tamaño de la ventana del dispositivo
+      window.addEventListener('resize', enviarAltura);
+
+      // Si el DOM cambia (validaciones, pasos del formulario, mensajes, etc.)
+      new MutationObserver(enviarAltura).observe(document.body, { childList: true, subtree: true, attributes: true });
+
+      // Refuerzo cada cierto tiempo por si hay cambios asíncronos
+      setInterval(enviarAltura, 1000);
+    })();
   </script>
 </body>
 
