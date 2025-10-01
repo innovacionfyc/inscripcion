@@ -7,162 +7,187 @@ require_login();
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
 
-function generarSlug($texto) {
-    $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $texto)));
-    return $slug;
+function generarSlug($texto)
+{
+  $slug = strtolower(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $texto)));
+  return $slug;
 }
+
+/* Lugar por defecto para eventos presenciales (el que usas en los correos) */
+$DEFAULT_LUGAR_PRESENCIAL = "Centro de Convenciones Cafam Floresta\nAv. Cra. 68 No. 90-88, Bogotá - Salón Sauces";
 
 // 📌 Cargar usuarios comerciales desde la BD
 $comerciales = [];
 $sqlUsuarios = "SELECT id, nombre, email, whatsapp FROM usuarios WHERE activo = 1 ORDER BY nombre ASC";
 $resUsuarios = $conn->query($sqlUsuarios);
 if ($resUsuarios && $resUsuarios->num_rows > 0) {
-    while ($row = $resUsuarios->fetch_assoc()) {
-        $comerciales[] = $row;
-    }
+  while ($row = $resUsuarios->fetch_assoc()) {
+    $comerciales[] = $row;
+  }
 }
 
 // === Helper: guardarAdjuntos (múltiples archivos) ===
 // Compatible con PHP viejito (maneja tanto inputs [] como uno solo)
 if (!function_exists('guardarAdjuntos')) {
-    function guardarAdjuntos($inputName, $destDir) {
-        $permitidas = array('pdf','doc','docx','xls','xlsx','ppt','pptx','jpg','jpeg','png','gif','webp');
-        if (!isset($_FILES[$inputName])) return 0;
+  function guardarAdjuntos($inputName, $destDir)
+  {
+    $permitidas = array('pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'gif', 'webp');
+    if (!isset($_FILES[$inputName]))
+      return 0;
 
-        // Crea la carpeta destino si no existe
-        if (!is_dir($destDir)) { @mkdir($destDir, 0775, true); }
-
-        $moved = 0;
-
-        // Unificar a arrays (por si no usaron [])
-        $names = $_FILES[$inputName]['name'];
-        $tmps  = $_FILES[$inputName]['tmp_name'];
-        $errs  = $_FILES[$inputName]['error'];
-        $sizes = $_FILES[$inputName]['size'];
-
-        if (!is_array($names)) {
-            $names = array($names);
-            $tmps  = array($tmps);
-            $errs  = array($errs);
-            $sizes = array($sizes);
-        }
-
-        for ($i=0; $i<count($names); $i++) {
-            if ($errs[$i] !== UPLOAD_ERR_OK) continue;
-            $tmp  = $tmps[$i];
-            $name = $names[$i];
-            $size = (int)$sizes[$i];
-
-            if (!is_uploaded_file($tmp)) continue;
-
-            $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-            if (!in_array($ext, $permitidas)) continue;
-
-            // Límite 25MB por archivo
-            if ($size > 25 * 1024 * 1024) continue;
-
-            // Nombre seguro + único
-            $seguro = preg_replace('/[^A-Za-z0-9_\-\.]/','_', $name);
-            $seguro = date('Ymd_His') . '_' . mt_rand(1000,9999) . '_' . $seguro;
-
-            @move_uploaded_file($tmp, rtrim($destDir,'/').'/'.$seguro) && $moved++;
-        }
-
-        return $moved;
+    // Crea la carpeta destino si no existe
+    if (!is_dir($destDir)) {
+      @mkdir($destDir, 0775, true);
     }
+
+    $moved = 0;
+
+    // Unificar a arrays (por si no usaron [])
+    $names = $_FILES[$inputName]['name'];
+    $tmps = $_FILES[$inputName]['tmp_name'];
+    $errs = $_FILES[$inputName]['error'];
+    $sizes = $_FILES[$inputName]['size'];
+
+    if (!is_array($names)) {
+      $names = array($names);
+      $tmps = array($tmps);
+      $errs = array($errs);
+      $sizes = array($sizes);
+    }
+
+    for ($i = 0; $i < count($names); $i++) {
+      if ($errs[$i] !== UPLOAD_ERR_OK)
+        continue;
+      $tmp = $tmps[$i];
+      $name = $names[$i];
+      $size = (int) $sizes[$i];
+
+      if (!is_uploaded_file($tmp))
+        continue;
+
+      $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+      if (!in_array($ext, $permitidas))
+        continue;
+
+      // Límite 25MB por archivo
+      if ($size > 25 * 1024 * 1024)
+        continue;
+
+      // Nombre seguro + único
+      $seguro = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $name);
+      $seguro = date('Ymd_His') . '_' . mt_rand(1000, 9999) . '_' . $seguro;
+
+      @move_uploaded_file($tmp, rtrim($destDir, '/') . '/' . $seguro) && $moved++;
+    }
+
+    return $moved;
+  }
 }
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $nombre           = $_POST["nombre"] ?? '';
-    $slug             = generarSlug($nombre);
-    $modalidad        = $_POST["modalidad"] ?? '';
-    $fecha_limite     = $_POST["fecha_limite"] ?? '';
-    $comercial_id     = $_POST["comercial_user_id"] ?? null;
+  $nombre = $_POST["nombre"] ?? '';
+  $slug = generarSlug($nombre);
+  $modalidad = $_POST["modalidad"] ?? '';
+  $fecha_limite = $_POST["fecha_limite"] ?? '';
+  $comercial_id = $_POST["comercial_user_id"] ?? null;
 
-    // --- Upload imagen principal del evento ---
-    $nombreImagen = '';
-    if (!empty($_FILES['imagen']['name']) && $_FILES['imagen']['error'] === 0) {
-        $uploadsDir = dirname(__DIR__) . '/uploads/eventos/';
-        if (!is_dir($uploadsDir)) @mkdir($uploadsDir, 0775, true);
-        $ext = pathinfo($_FILES['imagen']['name'], PATHINFO_EXTENSION);
-        $nombreImagen = uniqid('evento_') . '.' . $ext;
-        move_uploaded_file($_FILES['imagen']['tmp_name'], $uploadsDir . $nombreImagen);
+  // === NUEVO: lugar personalizado (solo si modalidad es presencial y elige "Sí")
+  $cambiar_lugar = isset($_POST['cambiar_lugar']) ? strtoupper(trim($_POST['cambiar_lugar'])) : 'NO';
+  $lugar_personalizado = null;
+  if (strtolower($modalidad) === 'presencial' && $cambiar_lugar === 'SI') {
+    $lugar_personalizado = trim($_POST['lugar_personalizado'] ?? '');
+    if ($lugar_personalizado === '')
+      $lugar_personalizado = null;
+  }
+
+  // --- Upload imagen principal del evento ---
+  $nombreImagen = '';
+  if (!empty($_FILES['imagen']['name']) && $_FILES['imagen']['error'] === 0) {
+    $uploadsDir = dirname(__DIR__) . '/uploads/eventos/';
+    if (!is_dir($uploadsDir))
+      @mkdir($uploadsDir, 0775, true);
+    $ext = pathinfo($_FILES['imagen']['name'], PATHINFO_EXTENSION);
+    $nombreImagen = uniqid('evento_') . '.' . $ext;
+    move_uploaded_file($_FILES['imagen']['tmp_name'], $uploadsDir . $nombreImagen);
+  }
+
+  // INSERT  (NUEVO: agregamos lugar_personalizado)
+  $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, lugar_personalizado, fecha_limite, comercial_user_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  $stmt->bind_param("ssssssi", $nombre, $slug, $nombreImagen, $modalidad, $lugar_personalizado, $fecha_limite, $comercial_id);
+
+  if ($stmt->execute()) {
+    $evento_id = $stmt->insert_id;
+    $stmt->close();
+
+    // Captura de fechas/horarios
+    $fechas = $_POST["fechas"] ?? [];
+    $horas_inicio = $_POST["hora_inicio"] ?? [];
+    $horas_fin = $_POST["hora_fin"] ?? [];
+
+    if (!empty($fechas)) {
+      $stmt_fecha = $conn->prepare("INSERT INTO eventos_fechas (evento_id, fecha, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)");
+      $fecha = $hora_inicio = $hora_fin = null;
+      $stmt_fecha->bind_param("isss", $evento_id, $fecha, $hora_inicio, $hora_fin);
+
+      for ($i = 0; $i < count($fechas); $i++) {
+        $fecha = $fechas[$i];
+        $hora_inicio = $horas_inicio[$i] ?? null;
+        $hora_fin = $horas_fin[$i] ?? null;
+        $stmt_fecha->execute();
+      }
+      $stmt_fecha->close();
     }
 
-    // INSERT
-    $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, fecha_limite, comercial_user_id) VALUES (?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("sssssi", $nombre, $slug, $nombreImagen, $modalidad, $fecha_limite, $comercial_id);
+    // === ADJUNTOS POR MODALIDAD → docs/evento_{virtual|presencial}/{evento_id}/ ===
+    $baseDocs = dirname(__DIR__) . '/docs';
+    $modLow = strtolower(trim($modalidad));
 
-    if ($stmt->execute()) {
-        $evento_id = $stmt->insert_id;
-        $stmt->close();
-
-        // Captura de fechas/horarios
-        $fechas       = $_POST["fechas"] ?? [];
-        $horas_inicio = $_POST["hora_inicio"] ?? [];
-        $horas_fin    = $_POST["hora_fin"] ?? [];
-
-        if (!empty($fechas)) {
-            $stmt_fecha = $conn->prepare("INSERT INTO eventos_fechas (evento_id, fecha, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)");
-            $fecha = $hora_inicio = $hora_fin = null;
-            $stmt_fecha->bind_param("isss", $evento_id, $fecha, $hora_inicio, $hora_fin);
-
-            for ($i = 0; $i < count($fechas); $i++) {
-                $fecha       = $fechas[$i];
-                $hora_inicio = $horas_inicio[$i] ?? null;
-                $hora_fin    = $horas_fin[$i] ?? null;
-                $stmt_fecha->execute();
-            }
-            $stmt_fecha->close();
-        }
-
-        // === ADJUNTOS POR MODALIDAD → docs/evento_{virtual|presencial}/{evento_id}/ ===
-        $baseDocs = dirname(__DIR__) . '/docs';
-        $modLow   = strtolower(trim($modalidad));
-
-        if ($modLow === 'virtual') {
-            // Input <input type="file" name="docs_virtual[]" multiple>
-            $dest = $baseDocs . '/evento_virtual/' . (int)$evento_id;
-            guardarAdjuntos('docs_virtual', $dest);
-        } elseif ($modLow === 'presencial') {
-            // Input <input type="file" name="docs_presencial[]" multiple>
-            $dest = $baseDocs . '/evento_presencial/' . (int)$evento_id;
-            guardarAdjuntos('docs_presencial', $dest);
-        }
-
-        $conn->close();
-        header("Location: " . basename(__FILE__) . "?ok=1&slug=" . urlencode($slug));
-        exit;
-    } else {
-        $error = "Error al guardar el evento: " . $stmt->error;
-        $stmt->close();
-        $conn->close();
+    if ($modLow === 'virtual') {
+      // Input <input type="file" name="docs_virtual[]" multiple>
+      $dest = $baseDocs . '/evento_virtual/' . (int) $evento_id;
+      guardarAdjuntos('docs_virtual', $dest);
+    } elseif ($modLow === 'presencial') {
+      // Input <input type="file" name="docs_presencial[]" multiple>
+      $dest = $baseDocs . '/evento_presencial/' . (int) $evento_id;
+      guardarAdjuntos('docs_presencial', $dest);
     }
+
+    $conn->close();
+    header("Location: " . basename(__FILE__) . "?ok=1&slug=" . urlencode($slug));
+    exit;
+  } else {
+    $error = "Error al guardar el evento: " . $stmt->error;
+    $stmt->close();
+    $conn->close();
+  }
 }
 
 $slugValue = $_GET['slug'] ?? '';
-$formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : '';
+$formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : '';
 ?>
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <title>Crear evento</title>
   <link rel="stylesheet" href="../assets/css/output.css">
 </head>
+
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
   <div class="w-full max-w-4xl bg-white rounded-2xl shadow-2xl p-8 mt-10 space-y-6">
-  <?php
-  $back_to = 'dashboard.php';
-  $show_back = true;
-  include __DIR__ . '/_topbar.php';
-  ?>
+    <?php
+    $back_to = 'dashboard.php';
+    $show_back = true;
+    include __DIR__ . '/_topbar.php';
+    ?>
     <h1 class="text-2xl font-bold text-[#942934] text-center mb-4">📆 Crear nuevo evento</h1>
 
     <?php if (isset($_GET['ok']) && $_GET['ok'] == 1 && $slugValue): ?>
       <div class="bg-green-100 text-green-800 font-medium px-6 py-4 rounded-xl mb-4">
         <div class="flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24"
+            stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
           </svg>
           <span>Evento creado exitosamente</span>
@@ -171,17 +196,11 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         <div class="mt-3">
           <p class="text-sm">Enlace del formulario:</p>
           <div class="flex items-center gap-2 mt-2">
-            <input
-              type="text"
-              id="urlFormulario"
+            <input type="text" id="urlFormulario"
               class="bg-white text-sm border border-gray-300 rounded-xl px-4 py-2 w-full"
-              value="<?php echo htmlspecialchars($formURL, ENT_QUOTES, 'UTF-8'); ?>"
-              readonly
-            >
-            <button
-              onclick="copiarURL()"
-              class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold px-4 py-2 rounded-xl transition-all"
-            >
+              value="<?php echo htmlspecialchars($formURL, ENT_QUOTES, 'UTF-8'); ?>" readonly>
+            <button onclick="copiarURL()"
+              class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold px-4 py-2 rounded-xl transition-all">
               📋 Copiar URL
             </button>
           </div>
@@ -199,7 +218,8 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
     <?php endif; ?>
 
     <form id="form-evento" method="POST" enctype="multipart/form-data" class="space-y-6">
-      <input type="text" name="nombre" placeholder="Nombre del evento" required class="w-full p-3 border border-gray-300 rounded-xl" />
+      <input type="text" name="nombre" placeholder="Nombre del evento" required
+        class="w-full p-3 border border-gray-300 rounded-xl" />
       <input type="file" name="imagen" accept="image/*" required class="w-full border border-gray-300 rounded-xl p-2" />
 
       <div>
@@ -234,19 +254,34 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         </select>
       </div>
 
+      <!-- NUEVO: Cambiar lugar para Presencial -->
+      <div id="wrapCambiarLugar" class="mt-3 p-4 border border-gray-200 rounded-xl hidden">
+        <div class="font-semibold mb-2">¿Deseas cambiar el lugar por defecto?</div>
+        <label class="inline-flex items-center gap-2 mr-4">
+          <input type="radio" id="lugar_si" name="cambiar_lugar" value="SI" class="accent-[#942934]">
+          Sí
+        </label>
+        <label class="inline-flex items-center gap-2">
+          <input type="radio" id="lugar_no" name="cambiar_lugar" value="NO" class="accent-[#942934]" checked>
+          No
+        </label>
+
+        <textarea id="lugar_personalizado" name="lugar_personalizado"
+          class="mt-3 w-full p-3 border border-gray-300 rounded-xl" rows="3"
+          placeholder="Escribe aquí el lugar del evento" disabled></textarea>
+      </div>
+
       <!-- Adjuntos para VIRTUAL -->
       <div id="docs_virtual_wrap" style="display:none; margin-top:12px;">
         <label class="block font-semibold mb-1">Adjuntos para evento virtual</label>
-        <input type="file" name="docs_virtual[]" multiple
-               class="w-full p-3 border border-gray-300 rounded-xl">
+        <input type="file" name="docs_virtual[]" multiple class="w-full p-3 border border-gray-300 rounded-xl">
         <small class="text-gray-500">Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB c/u.</small>
       </div>
 
       <!-- Adjuntos para PRESENCIAL -->
       <div id="docs_presencial_wrap" style="display:none; margin-top:12px;">
         <label class="block font-semibold mb-1">Adjuntos para evento presencial</label>
-        <input type="file" name="docs_presencial[]" multiple
-               class="w-full p-3 border border-gray-300 rounded-xl">
+        <input type="file" name="docs_presencial[]" multiple class="w-full p-3 border border-gray-300 rounded-xl">
         <small class="text-gray-500">Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB c/u.</small>
       </div>
 
@@ -256,7 +291,8 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
       </div>
 
       <div class="text-center">
-        <button type="submit" class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 px-8 rounded-xl transition-all">
+        <button type="submit"
+          class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 px-8 rounded-xl transition-all">
           Crear evento
         </button>
       </div>
@@ -265,7 +301,7 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
 
   <script src="../assets/js/jquery.min.js"></script>
   <script>
-    // ===== Adjuntos por modalidad (aislado) =====
+    // ===== Adjuntos por modalidad + bloque "Cambiar lugar" =====
     (function () {
       function fycGetModalidad() {
         var sel = document.querySelector('select[name="modalidad"], #modalidad');
@@ -276,38 +312,70 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         return r ? String(r.value || '').toLowerCase() : '';
       }
 
-      function fycToggleAdjuntos() {
+      var DEF_LUGAR = <?php echo json_encode($DEFAULT_LUGAR_PRESENCIAL); ?>;
+
+      function fycToggleAdjuntosYLugar() {
         var v = fycGetModalidad();
         var vWrap = document.getElementById('docs_virtual_wrap');
         var pWrap = document.getElementById('docs_presencial_wrap');
         if (vWrap) vWrap.style.display = (v === 'virtual') ? 'block' : 'none';
         if (pWrap) pWrap.style.display = (v === 'presencial') ? 'block' : 'none';
+
+        // NUEVO: mostrar bloque cambiar lugar solo en presencial
+        var lugarWrap = document.getElementById('wrapCambiarLugar');
+        var rSi = document.getElementById('lugar_si');
+        var rNo = document.getElementById('lugar_no');
+        var ta = document.getElementById('lugar_personalizado');
+
+        if (lugarWrap) {
+          if (v === 'presencial') {
+            lugarWrap.classList.remove('hidden');
+            // Habilitar/Deshabilitar textarea según radio
+            var si = rSi && rSi.checked;
+            if (ta) {
+              ta.disabled = !si;
+              if (si && !ta.value) ta.value = DEF_LUGAR; // precargar si está vacío
+              if (!si && ta.value === DEF_LUGAR) ta.value = ''; // si desactiva, limpiamos el default
+            }
+          } else {
+            lugarWrap.classList.add('hidden');
+            if (ta) { ta.disabled = true; /* opcional: ta.value = ''; */ }
+            if (rNo) rNo.checked = true;
+            if (rSi) rSi.checked = false;
+          }
+        }
       }
 
-      function fycBindAdjuntos() {
+      function fycBind() {
         var sel = document.querySelector('select[name="modalidad"], #modalidad');
-        if (sel) sel.addEventListener('change', fycToggleAdjuntos);
+        if (sel) sel.addEventListener('change', fycToggleAdjuntosYLugar);
 
         var radios = document.querySelectorAll('input[name="modalidad"]');
         for (var i = 0; i < radios.length; i++) {
-          radios[i].addEventListener('change', fycToggleAdjuntos);
+          radios[i].addEventListener('change', fycToggleAdjuntosYLugar);
         }
-        fycToggleAdjuntos(); // inicial
+
+        var rSi = document.getElementById('lugar_si');
+        var rNo = document.getElementById('lugar_no');
+        if (rSi) rSi.addEventListener('change', fycToggleAdjuntosYLugar);
+        if (rNo) rNo.addEventListener('change', fycToggleAdjuntosYLugar);
+
+        fycToggleAdjuntosYLugar(); // inicial
       }
 
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', fycBindAdjuntos);
+        document.addEventListener('DOMContentLoaded', fycBind);
       } else {
-        fycBindAdjuntos();
+        fycBind();
       }
     })();
 
     // ===== Generador de días/horarios (aislado) =====
     (function () {
-      function byId(id){ return document.getElementById(id); }
+      function byId(id) { return document.getElementById(id); }
 
       function renderDias() {
-        var sel  = byId('num_dias');
+        var sel = byId('num_dias');
         var wrap = byId('dias_container');
         if (!sel || !wrap) return;
 
@@ -318,30 +386,30 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         var old = [];
         var rows = wrap.getElementsByClassName('fyc-dia-row');
         for (var i = 0; i < rows.length; i++) {
-          var f  = rows[i].querySelector('input[name="fechas[]"]');
+          var f = rows[i].querySelector('input[name="fechas[]"]');
           var hi = rows[i].querySelector('input[name="hora_inicio[]"]');
           var hf = rows[i].querySelector('input[name="hora_fin[]"]');
-          old.push({f: f ? f.value : '', hi: hi ? hi.value : '', hf: hf ? hf.value : ''});
+          old.push({ f: f ? f.value : '', hi: hi ? hi.value : '', hf: hf ? hf.value : '' });
         }
 
         var html = '';
         for (var j = 0; j < n; j++) {
-          var ov = old[j] || {f:'',hi:'',hf:''};
+          var ov = old[j] || { f: '', hi: '', hf: '' };
           html += ''
-          + '<div class="fyc-dia-row grid grid-cols-1 md:grid-cols-3 gap-3">'
+            + '<div class="fyc-dia-row grid grid-cols-1 md:grid-cols-3 gap-3">'
             + '<div>'
-              + '<label class="block text-sm font-medium mb-1">Fecha día ' + (j+1) + '</label>'
-              + '<input type="date" name="fechas[]" value="' + ov.f + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '<label class="block text-sm font-medium mb-1">Fecha día ' + (j + 1) + '</label>'
+            + '<input type="date" name="fechas[]" value="' + ov.f + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
             + '</div>'
             + '<div>'
-              + '<label class="block text-sm font-medium mb-1">Hora inicio</label>'
-              + '<input type="time" name="hora_inicio[]" value="' + ov.hi + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '<label class="block text-sm font-medium mb-1">Hora inicio</label>'
+            + '<input type="time" name="hora_inicio[]" value="' + ov.hi + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
             + '</div>'
             + '<div>'
-              + '<label class="block text-sm font-medium mb-1">Hora fin</label>'
-              + '<input type="time" name="hora_fin[]" value="' + ov.hf + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '<label class="block text-sm font-medium mb-1">Hora fin</label>'
+            + '<input type="time" name="hora_fin[]" value="' + ov.hf + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
             + '</div>'
-          + '</div>';
+            + '</div>';
         }
         wrap.innerHTML = html;
       }
@@ -361,12 +429,12 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
 
     function copiarURL() {
       var input = document.getElementById('urlFormulario');
-      var msg   = document.getElementById('mensajeCopiado');
+      var msg = document.getElementById('mensajeCopiado');
       var texto = input.value;
       if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(texto).then(function () {
           msg.classList.remove('hidden');
-          setTimeout(function(){ msg.classList.add('hidden'); }, 1500);
+          setTimeout(function () { msg.classList.add('hidden'); }, 1500);
         }).catch(fallbackCopy);
       } else {
         fallbackCopy();
@@ -376,7 +444,7 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
         try {
           document.execCommand('copy');
           msg.classList.remove('hidden');
-          setTimeout(function(){ msg.classList.add('hidden'); }, 1500);
+          setTimeout(function () { msg.classList.add('hidden'); }, 1500);
         } catch (e) {
           msg.textContent = "❌ No se pudo copiar";
           msg.classList.remove('hidden');
@@ -386,4 +454,5 @@ $formURL   = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : 
     window.copiarURL = copiarURL;
   </script>
 </body>
+
 </html>
