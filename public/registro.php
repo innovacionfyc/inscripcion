@@ -21,10 +21,10 @@ if ($slug === '') {
 // -----------------------------
 $evento = null;
 
-$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre FROM eventos WHERE slug = ? LIMIT 1');
+$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre, lugar_personalizado FROM eventos WHERE slug = ? LIMIT 1');
 $stmt->bind_param('s', $slug);
 $stmt->execute();
-$stmt->bind_result($ev_id, $ev_nombre, $ev_imagen, $ev_modalidad, $ev_fecha_limite, $ev_wa, $ev_firma, $ev_encargado);
+$stmt->bind_result($ev_id, $ev_nombre, $ev_imagen, $ev_modalidad, $ev_fecha_limite, $ev_wa, $ev_firma, $ev_encargado, $ev_lugar);
 if ($stmt->fetch()) {
   $evento = array(
     'id' => $ev_id,
@@ -34,10 +34,12 @@ if ($stmt->fetch()) {
     'fecha_limite' => $ev_fecha_limite,
     'whatsapp_numero' => $ev_wa,
     'firma_imagen' => $ev_firma,
-    'encargado_nombre' => $ev_encargado
+    'encargado_nombre' => $ev_encargado,
+    'lugar_personalizado' => $ev_lugar
   );
 }
 $stmt->close();
+
 
 if (!$evento) {
   http_response_code(404);
@@ -103,6 +105,21 @@ $resumen_fechas = !empty($fechas) ? resumirFechas($fechas) : 'Por definir';
 $detalle_horario = !empty($fechas) ? detalleHorarioHtml($fechas) : '<em>Pronto te enviaremos el horario detallado.</em>';
 
 $mensaje_exito = false;
+
+// Lugar final para el correo (solo si es presencial)
+$lugar_final = '';
+$modLow = strtolower($evento['modalidad'] ?? '');
+if ($modLow === 'presencial') {
+  if (!empty($evento['lugar_personalizado'])) {
+    // Permite saltos de línea escritos por el admin
+    $lugar_final = nl2br($evento['lugar_personalizado']);
+  } else {
+    // Lugar por defecto
+    $lugar_final = "Centro de Convenciones Cafam Floresta<br>Av. Cra. 68 No. 90-88, Bogotá - Salón Sauces";
+  }
+}
+// Si es virtual, $lugar_final queda vacío y el correo no mostrará bloque de lugar
+
 
 // =========================
 // Helpers de normalización (compatibles con PHP viejo)
@@ -423,7 +440,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       'adjunto_pdf' => $path_pdf,
       'firma_file' => $firma_file,          // firma embebida por CID
       'encargado_nombre' => $evento['encargado_nombre'],
-      'lugar' => $es_presencial ? "Centro de Convenciones Cafam Floresta<br>Av. Cra. 68 No. 90-88, Bogotá - Salón Sauces" : "",
+      'lugar' => $lugar_final,
 
       // Encabezado “Señores:”
       'entidad_empresa' => $entidad,
