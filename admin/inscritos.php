@@ -113,11 +113,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
 
       // Evento
       $evento = null;
-      $stmtE = $conn->prepare("SELECT nombre, imagen, modalidad, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre
+      $stmtE = $conn->prepare("SELECT nombre, imagen, modalidad, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre, lugar_personalizado
                                FROM eventos WHERE id = ? LIMIT 1");
       $stmtE->bind_param("i", $evento_id);
       $stmtE->execute();
-      $stmtE->bind_result($ev_nombre, $ev_imagen, $ev_modalidad, $ev_limite, $ev_wa, $ev_firma, $ev_encargado);
+      $stmtE->bind_result($ev_nombre, $ev_imagen, $ev_modalidad, $ev_limite, $ev_wa, $ev_firma, $ev_encargado, $ev_lugar);
       if ($stmtE->fetch()) {
         $evento = array(
           'id' => $evento_id,
@@ -127,7 +127,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
           'fecha_limite' => $ev_limite,
           'whatsapp_numero' => $ev_wa,
           'firma_imagen' => $ev_firma,
-          'encargado_nombre' => $ev_encargado
+          'encargado_nombre' => $ev_encargado,
+          'lugar_personalizado' => $ev_lugar
         );
       }
       $stmtE->close();
@@ -203,6 +204,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
           $detalle_horario = $det;
         }
 
+        // Lugar final para el correo (solo presencial)
+        $lugar_final = '';
+        $modLow = strtolower($evento['modalidad'] ?? '');
+        if ($modLow === 'presencial') {
+          if (!empty($evento['lugar_personalizado'])) {
+            // Permitimos <br> si el admin lo escribió con saltos de línea
+            $lugar_final = nl2br($evento['lugar_personalizado']);
+          } else {
+            // Por defecto
+            $lugar_final = "Centro de Convenciones Cafam Floresta<br>Av. Cra. 68 No. 90-88, Bogotá - Salón Sauces";
+          }
+        }
+
         // Correo destino
         $correoDestino = '';
         if ($destino_tipo === 'otro' && preg_match('/^\S+@\S+\.\S+$/', $email_otro)) {
@@ -260,7 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
             'firma_file' => $firma_file,
             'firma_url_public' => $firma_url_public,
             'encargado_nombre' => $evento['encargado_nombre'],
-            'lugar' => (strtolower($evento['modalidad']) === 'presencial' ? "Centro de Convenciones Cafam Floresta<br>Av. Cra. 68 No. 90-88, Bogotá - Salón Sauces" : ""),
+            'lugar' => $lugar_final,
             'entidad_empresa' => $entidad,
             'nombre_inscrito' => $ins_nombre,
             'whatsapp_numero' => $wa_num,
