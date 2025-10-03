@@ -374,15 +374,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // --- Armar datos del correo ---
     $es_presencial = (strtolower($evento['modalidad']) === 'presencial');
 
-    // PDF adjunto (solo presencial)
+    // PDF adjunto (solo presencial y solo si NO cambiaron el lugar por uno personalizado)
     $path_pdf = null;
     if ($es_presencial) {
-      $pdf_nombre = 'GUIA HOTELERA 2025 - Cafam.pdf';
-      $path_pdf_candidato = dirname(__DIR__) . '/docs/' . $pdf_nombre;
-      if (is_file($path_pdf_candidato)) {
-        $path_pdf = $path_pdf_candidato;
+      // Si el admin NO escribió un lugar personalizado, usamos el lugar por defecto (Cafam) y adjuntamos la guía
+      $usa_lugar_por_defecto = empty($evento['lugar_personalizado']);
+
+      if ($usa_lugar_por_defecto) {
+        $pdf_nombre = 'GUIA HOTELERA 2025 - Cafam.pdf';
+        $path_pdf_candidato = dirname(__DIR__) . '/docs/' . $pdf_nombre;
+        if (is_file($path_pdf_candidato)) {
+          $path_pdf = $path_pdf_candidato;
+        } else {
+          error_log('PDF no encontrado (revisa nombre y carpeta): ' . $path_pdf_candidato);
+        }
       } else {
-        error_log('PDF no encontrado (revisa nombre y carpeta): ' . $path_pdf_candidato);
+        // Lugar personalizado -> NO adjuntar guía hotelera
+        $path_pdf = null;
       }
     }
 
