@@ -129,7 +129,7 @@ class CorreoDenuncia
             );
 
             // Credenciales / remitente
-            $smtpUser = 'alerts@fycconsultores.com';
+            $smtpUser = 'innovacionti@fycconsultores.com';
             $smtpPass = 'zicy idns chmv fmqr'; // APP PASSWORD
             $fromEmail = 'alerts@fycconsultores.com';
             $fromName = 'F&C Consultores';
@@ -477,7 +477,7 @@ class CorreoDenuncia
             );
 
             // Credenciales / remitente
-            $smtpUser = 'alerts@fycconsultores.com';
+            $smtpUser = 'innovacionti@fycconsultores.com';
             $smtpPass = 'zicy idns chmv fmqr'; // APP PASSWORD
             $fromEmail = 'alerts@fycconsultores.com';
             $fromName = 'F&C Consultores';

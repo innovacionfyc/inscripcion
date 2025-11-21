@@ -20,7 +20,7 @@ try {
         ]
     ];
 
-    $mail->Username = 'alerts@fycconsultores.com';
+    $mail->Username = 'innovacionti@fycconsultores.com';
     $mail->Password = 'zicy idns chmv fmqr'; // tu app password
 
     $mail->setFrom('alerts@fycconsultores.com', 'F&C Consultores');
