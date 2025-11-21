@@ -130,7 +130,7 @@ class CorreoDenuncia
 
             // Credenciales / remitente
             $smtpUser = 'it@fycconsultores.com';
-            $smtpPass = 'ecym cwbl dfkg maea'; // APP PASSWORD
+            $smtpPass = 'esxp dnds zqko fheu'; // APP PASSWORD
             $fromEmail = 'certificados@fycconsultores.com';
             $fromName = 'F&C Consultores';
 
@@ -478,7 +478,7 @@ class CorreoDenuncia
 
             // Credenciales / remitente
             $smtpUser = 'it@fycconsultores.com';
-            $smtpPass = 'ecym cwbl dfkg maea'; // APP PASSWORD
+            $smtpPass = 'esxp dnds zqko fheu'; // APP PASSWORD
             $fromEmail = 'certificados@fycconsultores.com';
             $fromName = 'F&C Consultores';
 

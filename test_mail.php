@@ -8,26 +8,26 @@ $mail = new PHPMailer(true);
 
 try {
     $mail->isSMTP();
-    $mail->Host       = 'smtp-relay.gmail.com';
-    $mail->Port       = 25; // como usas en el proyecto
-    $mail->SMTPAuth   = true;
+    $mail->Host = 'smtp-relay.gmail.com';
+    $mail->Port = 25; // como usas en el proyecto
+    $mail->SMTPAuth = true;
     $mail->SMTPSecure = false;
     $mail->SMTPOptions = [
         'ssl' => [
-            'verify_peer'       => false,
-            'verify_peer_name'  => false,
+            'verify_peer' => false,
+            'verify_peer_name' => false,
             'allow_self_signed' => true
         ]
     ];
 
-    $mail->Username   = 'it@fycconsultores.com';
-    $mail->Password   = 'ecym cwbl dfkg maea'; // tu app password
+    $mail->Username = 'it@fycconsultores.com';
+    $mail->Password = 'esxp dnds zqko fheu'; // tu app password
 
     $mail->setFrom('certificados@fycconsultores.com', 'F&C Consultores');
     $mail->addAddress('emgladino@gmail.com', 'Prueba');
 
     $mail->Subject = '✅ Prueba de envío PHPMailer';
-    $mail->Body    = 'Hola! Este es un correo de prueba enviado desde test_mail.php usando PHPMailer.';
+    $mail->Body = 'Hola! Este es un correo de prueba enviado desde test_mail.php usando PHPMailer.';
 
     if ($mail->send()) {
         echo "✅ Correo enviado correctamente";
