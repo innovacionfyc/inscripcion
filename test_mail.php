@@ -23,7 +23,7 @@ try {
     $mail->Username = 'alerts@fycconsultores.com';
     $mail->Password = 'zicy idns chmv fmqr'; // tu app password
 
-    $mail->setFrom('certificados@fycconsultores.com', 'F&C Consultores');
+    $mail->setFrom('alerts@fycconsultores.com', 'F&C Consultores');
     $mail->addAddress('emgladino@gmail.com', 'Prueba');
 
     $mail->Subject = '✅ Prueba de envío PHPMailer';
