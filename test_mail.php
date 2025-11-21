@@ -20,8 +20,8 @@ try {
         ]
     ];
 
-    $mail->Username = 'it@fycconsultores.com';
-    $mail->Password = 'esxp dnds zqko fheu'; // tu app password
+    $mail->Username = 'alerts@fycconsultores.com';
+    $mail->Password = 'zicy idns chmv fmqr'; // tu app password
 
     $mail->setFrom('certificados@fycconsultores.com', 'F&C Consultores');
     $mail->addAddress('emgladino@gmail.com', 'Prueba');
