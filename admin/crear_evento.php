@@ -119,37 +119,96 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $evento_id = $stmt->insert_id;
     $stmt->close();
 
-    // Captura de fechas/horarios
-    $fechas = $_POST["fechas"] ?? [];
-    $horas_inicio = $_POST["hora_inicio"] ?? [];
-    $horas_fin = $_POST["hora_fin"] ?? [];
+    // ===============================
+    // Guardar fechas/horarios
+    // (Soporta Presencial / Virtual / Híbrida)
+    // ===============================
+    $modLow = strtolower(trim($modalidad));
 
-    if (!empty($fechas)) {
-      $stmt_fecha = $conn->prepare("INSERT INTO eventos_fechas (evento_id, fecha, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)");
-      $fecha = $hora_inicio = $hora_fin = null;
-      $stmt_fecha->bind_param("isss", $evento_id, $fecha, $hora_inicio, $hora_fin);
+    $stmt_fecha = $conn->prepare("INSERT INTO eventos_fechas (evento_id, tipo, fecha, hora_inicio, hora_fin) VALUES (?, ?, ?, ?, ?)");
+    $tipo = $fecha = $hora_inicio = $hora_fin = null;
+    $stmt_fecha->bind_param("issss", $evento_id, $tipo, $fecha, $hora_inicio, $hora_fin);
+
+    if ($modLow === 'hibrida') {
+
+      // Presenciales
+      $fechasP = $_POST["fechas_presencial"] ?? [];
+      $hinP = $_POST["hora_inicio_presencial"] ?? [];
+      $hfinP = $_POST["hora_fin_presencial"] ?? [];
+
+      for ($i = 0; $i < count($fechasP); $i++) {
+        $tipo = 'presencial';
+        $fecha = $fechasP[$i] ?? null;
+        $hora_inicio = $hinP[$i] ?? null;
+        $hora_fin = $hfinP[$i] ?? null;
+
+        if (!empty($fecha)) {
+          $stmt_fecha->execute();
+        }
+      }
+
+      // Virtuales
+      $fechasV = $_POST["fechas_virtual"] ?? [];
+      $hinV = $_POST["hora_inicio_virtual"] ?? [];
+      $hfinV = $_POST["hora_fin_virtual"] ?? [];
+
+      for ($i = 0; $i < count($fechasV); $i++) {
+        $tipo = 'virtual';
+        $fecha = $fechasV[$i] ?? null;
+        $hora_inicio = $hinV[$i] ?? null;
+        $hora_fin = $hfinV[$i] ?? null;
+
+        if (!empty($fecha)) {
+          $stmt_fecha->execute();
+        }
+      }
+
+    } else {
+
+      // Modalidad normal (como antes)
+      $fechas = $_POST["fechas"] ?? [];
+      $hin = $_POST["hora_inicio"] ?? [];
+      $hfin = $_POST["hora_fin"] ?? [];
+
+      // guardamos tipo consistente
+      $tipoNormal = ($modLow === 'presencial') ? 'presencial' : (($modLow === 'virtual') ? 'virtual' : 'general');
 
       for ($i = 0; $i < count($fechas); $i++) {
-        $fecha = $fechas[$i];
-        $hora_inicio = $horas_inicio[$i] ?? null;
-        $hora_fin = $horas_fin[$i] ?? null;
-        $stmt_fecha->execute();
+        $tipo = $tipoNormal;
+        $fecha = $fechas[$i] ?? null;
+        $hora_inicio = $hin[$i] ?? null;
+        $hora_fin = $hfin[$i] ?? null;
+
+        if (!empty($fecha)) {
+          $stmt_fecha->execute();
+        }
       }
-      $stmt_fecha->close();
     }
+
+    $stmt_fecha->close();
 
     // === ADJUNTOS POR MODALIDAD → docs/evento_{virtual|presencial}/{evento_id}/ ===
     $baseDocs = dirname(__DIR__) . '/docs';
     $modLow = strtolower(trim($modalidad));
 
     if ($modLow === 'virtual') {
-      // Input <input type="file" name="docs_virtual[]" multiple>
+
       $dest = $baseDocs . '/evento_virtual/' . (int) $evento_id;
       guardarAdjuntos('docs_virtual', $dest);
+
     } elseif ($modLow === 'presencial') {
-      // Input <input type="file" name="docs_presencial[]" multiple>
+
       $dest = $baseDocs . '/evento_presencial/' . (int) $evento_id;
       guardarAdjuntos('docs_presencial', $dest);
+
+    } elseif ($modLow === 'hibrida') {
+
+      // Híbrida: guarda ambos
+      $destV = $baseDocs . '/evento_virtual/' . (int) $evento_id;
+      guardarAdjuntos('docs_virtual', $destV);
+
+      $destP = $baseDocs . '/evento_presencial/' . (int) $evento_id;
+      guardarAdjuntos('docs_presencial', $destP);
     }
 
     $conn->close();
@@ -238,12 +297,23 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         <label class="font-semibold text-gray-700">¿Cuántos días dura el evento?</label>
         <select id="num_dias" class="w-full p-3 border border-gray-300 rounded-xl mt-2">
           <option value="">Selecciona...</option>
-          <?php for ($i = 1; $i <= 7; $i++): ?>
+          <?php for ($i = 1; $i <= 10; $i++): ?>
             <option value="<?php echo $i; ?>"><?php echo $i; ?> día<?php echo ($i > 1 ? 's' : ''); ?></option>
           <?php endfor; ?>
         </select>
       </div>
       <div id="dias_container" class="space-y-4"></div>
+
+      <!-- NUEVO: contenedores para modalidad Híbrida -->
+      <div id="dias_presencial_wrap" class="space-y-4 hidden">
+        <h3 class="text-lg font-bold text-gray-800">Fechas presenciales</h3>
+        <div id="dias_presencial_container" class="space-y-4"></div>
+      </div>
+
+      <div id="dias_virtual_wrap" class="space-y-4 hidden">
+        <h3 class="text-lg font-bold text-gray-800">Fechas virtuales</h3>
+        <div id="dias_virtual_container" class="space-y-4"></div>
+      </div>
 
       <div>
         <label class="font-semibold text-gray-700">Modalidad:</label>
@@ -251,6 +321,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           <option value="">Selecciona...</option>
           <option value="Presencial">Presencial</option>
           <option value="Virtual">Virtual</option>
+          <option value="Hibrida">Híbrida</option>
         </select>
       </div>
 
@@ -318,8 +389,23 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         var v = fycGetModalidad();
         var vWrap = document.getElementById('docs_virtual_wrap');
         var pWrap = document.getElementById('docs_presencial_wrap');
-        if (vWrap) vWrap.style.display = (v === 'virtual') ? 'block' : 'none';
-        if (pWrap) pWrap.style.display = (v === 'presencial') ? 'block' : 'none';
+        if (vWrap) vWrap.style.display = (v === 'virtual' || v === 'hibrida') ? 'block' : 'none';
+        if (pWrap) pWrap.style.display = (v === 'presencial' || v === 'hibrida') ? 'block' : 'none';
+
+        // ===== NUEVO: Mostrar 2 bloques de fechas si es híbrida =====
+        var diasNormal = document.getElementById('dias_container');
+        var presWrap = document.getElementById('dias_presencial_wrap');
+        var virtWrap = document.getElementById('dias_virtual_wrap');
+
+        if (v === 'hibrida') {
+          if (diasNormal) diasNormal.classList.add('hidden');
+          if (presWrap) presWrap.classList.remove('hidden');
+          if (virtWrap) virtWrap.classList.remove('hidden');
+        } else {
+          if (diasNormal) diasNormal.classList.remove('hidden');
+          if (presWrap) presWrap.classList.add('hidden');
+          if (virtWrap) virtWrap.classList.add('hidden');
+        }
 
         // NUEVO: mostrar bloque cambiar lugar solo en presencial
         var lugarWrap = document.getElementById('wrapCambiarLugar');
@@ -328,7 +414,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         var ta = document.getElementById('lugar_personalizado');
 
         if (lugarWrap) {
-          if (v === 'presencial') {
+          if (v === 'presencial' || v === 'hibrida') {
             lugarWrap.classList.remove('hidden');
             // Habilitar/Deshabilitar textarea según radio
             var si = rSi && rSi.checked;
@@ -370,54 +456,143 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
       }
     })();
 
-    // ===== Generador de días/horarios (aislado) =====
+    // ===== Generador de días/horarios (soporta híbrida) =====
     (function () {
       function byId(id) { return document.getElementById(id); }
 
-      function renderDias() {
-        var sel = byId('num_dias');
-        var wrap = byId('dias_container');
-        if (!sel || !wrap) return;
+      function getModalidadLower() {
+        var sel = document.querySelector('select[name="modalidad"], #modalidad');
+        if (sel && typeof sel.value !== 'undefined') return String(sel.value || '').toLowerCase();
+        var r = document.querySelector('input[name="modalidad"]:checked');
+        return r ? String(r.value || '').toLowerCase() : '';
+      }
 
-        var n = parseInt(sel.value, 10);
-        if (!n || n < 1) { wrap.innerHTML = ''; return; }
-
-        // Guardar valores existentes para no perderlos al cambiar n
-        var old = [];
-        var rows = wrap.getElementsByClassName('fyc-dia-row');
-        for (var i = 0; i < rows.length; i++) {
-          var f = rows[i].querySelector('input[name="fechas[]"]');
-          var hi = rows[i].querySelector('input[name="hora_inicio[]"]');
-          var hf = rows[i].querySelector('input[name="hora_fin[]"]');
-          old.push({ f: f ? f.value : '', hi: hi ? hi.value : '', hf: hf ? hf.value : '' });
-        }
-
+      function buildRowsHTML(n, prefix, old) {
         var html = '';
         for (var j = 0; j < n; j++) {
-          var ov = old[j] || { f: '', hi: '', hf: '' };
+          var ov = (old && old[j]) ? old[j] : { f: '', hi: '', hf: '' };
           html += ''
             + '<div class="fyc-dia-row grid grid-cols-1 md:grid-cols-3 gap-3">'
             + '<div>'
             + '<label class="block text-sm font-medium mb-1">Fecha día ' + (j + 1) + '</label>'
-            + '<input type="date" name="fechas[]" value="' + ov.f + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '<input type="date" name="fechas_' + prefix + '[]" value="' + ov.f + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
             + '</div>'
             + '<div>'
             + '<label class="block text-sm font-medium mb-1">Hora inicio</label>'
-            + '<input type="time" name="hora_inicio[]" value="' + ov.hi + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '<input type="time" name="hora_inicio_' + prefix + '[]" value="' + ov.hi + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
             + '</div>'
             + '<div>'
             + '<label class="block text-sm font-medium mb-1">Hora fin</label>'
-            + '<input type="time" name="hora_fin[]" value="' + ov.hf + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '<input type="time" name="hora_fin_' + prefix + '[]" value="' + ov.hf + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
             + '</div>'
             + '</div>';
         }
-        wrap.innerHTML = html;
+        return html;
+      }
+
+      function readOldValues(containerId, prefix) {
+        var wrap = byId(containerId);
+        if (!wrap) return [];
+        var out = [];
+        var rows = wrap.getElementsByClassName('fyc-dia-row');
+        for (var i = 0; i < rows.length; i++) {
+          var f = rows[i].querySelector('input[name="fechas_' + prefix + '[]"]');
+          var hi = rows[i].querySelector('input[name="hora_inicio_' + prefix + '[]"]');
+          var hf = rows[i].querySelector('input[name="hora_fin_' + prefix + '[]"]');
+          out.push({ f: f ? f.value : '', hi: hi ? hi.value : '', hf: hf ? hf.value : '' });
+        }
+        return out;
+      }
+
+      function renderDias() {
+        var sel = byId('num_dias');
+        if (!sel) return;
+
+        var n = parseInt(sel.value, 10);
+        if (!n || n < 1) {
+          // limpiar
+          var normal = byId('dias_container');
+          var pres = byId('dias_presencial_container');
+          var virt = byId('dias_virtual_container');
+          if (normal) normal.innerHTML = '';
+          if (pres) pres.innerHTML = '';
+          if (virt) virt.innerHTML = '';
+          return;
+        }
+
+        var modalidad = getModalidadLower();
+
+        // Normal (presencial o virtual)
+        var normalWrap = byId('dias_container');
+
+        // Híbrida
+        var presWrap = byId('dias_presencial_container');
+        var virtWrap = byId('dias_virtual_container');
+
+        if (modalidad === 'hibrida') {
+          // Guardar valores existentes (no perder lo digitado)
+          var oldPres = readOldValues('dias_presencial_container', 'presencial');
+          var oldVirt = readOldValues('dias_virtual_container', 'virtual');
+
+          if (presWrap) presWrap.innerHTML = buildRowsHTML(n, 'presencial', oldPres);
+          if (virtWrap) virtWrap.innerHTML = buildRowsHTML(n, 'virtual', oldVirt);
+
+          // por si acaso, limpiar el normal (ya está oculto)
+          if (normalWrap) normalWrap.innerHTML = '';
+
+        } else {
+          // Guardar valores existentes
+          var old = [];
+          if (normalWrap) {
+            var rows = normalWrap.getElementsByClassName('fyc-dia-row');
+            for (var i = 0; i < rows.length; i++) {
+              var f = rows[i].querySelector('input[name="fechas[]"]');
+              var hi = rows[i].querySelector('input[name="hora_inicio[]"]');
+              var hf = rows[i].querySelector('input[name="hora_fin[]"]');
+              old.push({ f: f ? f.value : '', hi: hi ? hi.value : '', hf: hf ? hf.value : '' });
+            }
+          }
+
+          // Render normal con los mismos name="fechas[]"
+          var html = '';
+          for (var j = 0; j < n; j++) {
+            var ov = old[j] || { f: '', hi: '', hf: '' };
+            html += ''
+              + '<div class="fyc-dia-row grid grid-cols-1 md:grid-cols-3 gap-3">'
+              + '<div>'
+              + '<label class="block text-sm font-medium mb-1">Fecha día ' + (j + 1) + '</label>'
+              + '<input type="date" name="fechas[]" value="' + ov.f + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+              + '</div>'
+              + '<div>'
+              + '<label class="block text-sm font-medium mb-1">Hora inicio</label>'
+              + '<input type="time" name="hora_inicio[]" value="' + ov.hi + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+              + '</div>'
+              + '<div>'
+              + '<label class="block text-sm font-medium mb-1">Hora fin</label>'
+              + '<input type="time" name="hora_fin[]" value="' + ov.hf + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+              + '</div>'
+              + '</div>';
+          }
+          if (normalWrap) normalWrap.innerHTML = html;
+
+          // limpiar híbrida por si venías de híbrida
+          if (presWrap) presWrap.innerHTML = '';
+          if (virtWrap) virtWrap.innerHTML = '';
+        }
       }
 
       function bindDias() {
         var sel = byId('num_dias');
         if (sel) sel.addEventListener('change', renderDias);
-        renderDias(); // inicial por si ya tiene valor
+
+        // Cuando cambie modalidad, re-render para cambiar a híbrida o normal sin perder select
+        var modSel = document.querySelector('select[name="modalidad"], #modalidad');
+        if (modSel) modSel.addEventListener('change', renderDias);
+
+        var radios = document.querySelectorAll('input[name="modalidad"]');
+        for (var i = 0; i < radios.length; i++) radios[i].addEventListener('change', renderDias);
+
+        renderDias();
       }
 
       if (document.readyState === 'loading') {

@@ -48,17 +48,155 @@ if (!$evento) {
 }
 
 // -----------------------------
-// 3) Fechas/horario del evento
+// 3) Fechas/horario del evento (con tipo)
 // -----------------------------
-$fechas = array();
-$stmtf = $conn->prepare("SELECT fecha, hora_inicio, hora_fin FROM eventos_fechas WHERE evento_id = ? ORDER BY fecha ASC");
+$fechas_presenciales = array();
+$fechas_virtuales = array();
+$fechas_generales = array(); // por si quedan "general" en híbrida
+
+$stmtf = $conn->prepare("
+    SELECT tipo, fecha, hora_inicio, hora_fin
+    FROM eventos_fechas
+    WHERE evento_id = ?
+    ORDER BY fecha ASC
+  ");
 $stmtf->bind_param("i", $evento['id']);
 $stmtf->execute();
-$stmtf->bind_result($f_fecha, $f_hi, $f_hf);
+$stmtf->bind_result($f_tipo, $f_fecha, $f_hi, $f_hf);
+
 while ($stmtf->fetch()) {
-  $fechas[] = array('fecha' => $f_fecha, 'hora_inicio' => $f_hi, 'hora_fin' => $f_hf);
+  $row = array(
+    'tipo' => $f_tipo,
+    'fecha' => $f_fecha,
+    'hora_inicio' => $f_hi,
+    'hora_fin' => $f_hf
+  );
+
+  $tipo = strtolower(trim($f_tipo));
+  $mod = strtolower(trim($evento['modalidad'] ?? ''));
+
+  if ($tipo === 'presencial') {
+    $fechas_presenciales[] = $row;
+  } elseif ($tipo === 'virtual') {
+    $fechas_virtuales[] = $row;
+  } else {
+    // tipo = 'general' (o cualquier cosa rara) -> compatibilidad con eventos antiguos
+    if ($mod === 'presencial') {
+      $fechas_presenciales[] = $row;
+    } elseif ($mod === 'virtual') {
+      $fechas_virtuales[] = $row;
+    } else {
+      // híbrida: si por alguna razón quedó "general", no la botamos
+      $fechas_generales[] = $row;
+    }
+  }
 }
 $stmtf->close();
+
+// 2) Compatibilidad: tu código ya trabaja con $fechas (módulos/asistencia)
+$mod = strtolower(trim($evento['modalidad'] ?? ''));
+
+if ($mod === 'hibrida') {
+  // en híbrida: diplomado completo -> usamos TODAS las fechas (presencial + virtual)
+  $fechas = array_merge($fechas_presenciales, $fechas_virtuales);
+
+  // ordenamos por fecha por seguridad
+  usort($fechas, function ($a, $b) {
+    return strcmp($a['fecha'], $b['fecha']);
+  });
+} else {
+  // comportamiento que ya tenías
+  $fechas = ($mod === 'virtual') ? $fechas_virtuales : $fechas_presenciales;
+}
+
+
+// 3) Fallback ultra seguro: si por algún motivo no hay tipo,
+// intentamos leer las "general" (para no dejar el evento sin fechas)
+if (empty($fechas_presenciales) && empty($fechas_virtuales)) {
+  $stmtf2 = $conn->prepare("
+      SELECT fecha, hora_inicio, hora_fin
+      FROM eventos_fechas
+      WHERE evento_id = ?
+    ORDER BY tipo ASC, fecha ASC
+    ");
+  $stmtf2->bind_param("i", $evento['id']);
+  $stmtf2->execute();
+  $stmtf2->bind_result($f_fecha2, $f_hi2, $f_hf2);
+  while ($stmtf2->fetch()) {
+    $fechas[] = array('fecha' => $f_fecha2, 'hora_inicio' => $f_hi2, 'hora_fin' => $f_hf2);
+  }
+  $stmtf2->close();
+
+} else {
+
+  $modx = strtolower(trim($evento['modalidad'] ?? ''));
+  if ($modx !== 'hibrida') {
+
+    // Virtual o Presencial (eventos antiguos): comportamiento clásico
+    $fechas = array();
+
+    $stmtf = $conn->prepare("
+      SELECT fecha, hora_inicio, hora_fin
+      FROM eventos_fechas
+      WHERE evento_id = ?
+        AND tipo = 'general'
+      ORDER BY fecha ASC
+    ");
+    $stmtf->bind_param("i", $evento['id']);
+    $stmtf->execute();
+    $stmtf->bind_result($f_fecha, $f_hi, $f_hf);
+
+    while ($stmtf->fetch()) {
+      $fechas[] = array('fecha' => $f_fecha, 'hora_inicio' => $f_hi, 'hora_fin' => $f_hf);
+    }
+    $stmtf->close();
+
+    // Fallback si no hay general
+    if (empty($fechas)) {
+      $stmtf2 = $conn->prepare("
+        SELECT fecha, hora_inicio, hora_fin
+        FROM eventos_fechas
+        WHERE evento_id = ?
+        ORDER BY fecha ASC
+      ");
+      $stmtf2->bind_param("i", $evento['id']);
+      $stmtf2->execute();
+      $stmtf2->bind_result($f_fecha2, $f_hi2, $f_hf2);
+
+      while ($stmtf2->fetch()) {
+        $fechas[] = array('fecha' => $f_fecha2, 'hora_inicio' => $f_hi2, 'hora_fin' => $f_hf2);
+      }
+      $stmtf2->close();
+    }
+
+  } // ✅ si es híbrida NO hacemos nada aquí (porque ya tienes $fechas_virtuales y $fechas_presenciales)
+}
+
+function pintarFechasHtml($fechasArr)
+{
+  if (empty($fechasArr))
+    return '<div class="text-gray-500 text-sm">—</div>';
+
+  $meses = array('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre');
+  $out = "<div class='space-y-1'>";
+
+  for ($i = 0; $i < count($fechasArr); $i++) {
+    $f = $fechasArr[$i];
+    $d = (int) date('j', strtotime($f['fecha']));
+    $m = $meses[(int) date('n', strtotime($f['fecha'])) - 1];
+    $y = date('Y', strtotime($f['fecha']));
+
+    $hi = date('g:i a', strtotime($f['fecha'] . ' ' . $f['hora_inicio']));
+    $hf = date('g:i a', strtotime($f['fecha'] . ' ' . $f['hora_fin']));
+    $hi = str_replace(array('am', 'pm'), array('a. m.', 'p. m.'), strtolower($hi));
+    $hf = str_replace(array('am', 'pm'), array('a. m.', 'p. m.'), strtolower($hf));
+
+    $out .= "<div class='text-sm text-gray-700'>" . $d . " de " . $m . " de " . $y . " — <span class='font-semibold'>" . $hi . "</span> a <span class='font-semibold'>" . $hf . "</span></div>";
+  }
+
+  $out .= "</div>";
+  return $out;
+}
 
 function resumirFechas($fechasArr)
 {
@@ -101,8 +239,45 @@ function detalleHorarioHtml($fechasArr)
   return $html;
 }
 
-$resumen_fechas = !empty($fechas) ? resumirFechas($fechas) : 'Por definir';
-$detalle_horario = !empty($fechas) ? detalleHorarioHtml($fechas) : '<em>Pronto te enviaremos el horario detallado.</em>';
+$modLowResumen = strtolower(trim($evento['modalidad'] ?? ''));
+
+if ($modLowResumen === 'hibrida') {
+
+  // Resúmenes separados (solo fechas, sin horas)
+  $resP = !empty($fechas_presenciales) ? resumirFechas($fechas_presenciales) : 'Por definir';
+  $resV = !empty($fechas_virtuales) ? resumirFechas($fechas_virtuales) : 'Por definir';
+
+  $resumen_fechas = "Presencial: " . $resP . " | Virtual: " . $resV;
+
+  // Detalle horario separado (con horas)
+  $detP = !empty($fechas_presenciales) ? detalleHorarioHtml($fechas_presenciales) : '<em>Por definir.</em>';
+  $detV = !empty($fechas_virtuales) ? detalleHorarioHtml($fechas_virtuales) : '<em>Por definir.</em>';
+
+  $detalle_horario = ""
+    . "<div style='margin-bottom:10px;'><strong>Presencial</strong>" . $detP . "</div>"
+    . "<div><strong>Virtual</strong>" . $detV . "</div>";
+
+} else {
+
+  // Comportamiento clásico (no tocar)
+  $resumen_fechas = !empty($fechas) ? resumirFechas($fechas) : 'Por definir';
+  $detalle_horario = !empty($fechas) ? detalleHorarioHtml($fechas) : '<em>Pronto te enviaremos el horario detallado.</em>';
+}
+if (
+  isset($_GET['debug']) &&
+  $_GET['debug'] === 'fechas' &&
+  $_SERVER['HTTP_HOST'] === 'localhost'
+) {
+  echo '<pre style="background:#111;color:#0f0;padding:16px;border-radius:8px">';
+  echo "MODALIDAD:\n";
+  var_dump($evento['modalidad']);
+  echo "\n\nRESUMEN_FECHAS:\n";
+  var_dump($resumen_fechas);
+  echo "\n\nDETALLE_HORARIO (HTML):\n";
+  echo $detalle_horario;
+  echo '</pre>';
+  exit;
+}
 
 $mensaje_exito = false;
 
@@ -266,9 +441,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   }
 
   // ===== Asistencia (solo virtual) =====
-  $es_virtual = (strtolower($evento['modalidad']) === 'virtual');
+  $mod_form = strtolower(trim($evento['modalidad'] ?? ''));
+  $es_virtual = ($mod_form === 'virtual');   // ✅ ESTA LÍNEA ES LA CLAVE
+
   $asistencia_tipo = 'COMPLETO';
   $modulos_csv = '';
+
 
   if ($es_virtual) {
     $asistencia_tipo = isset($_POST['asistencia_tipo']) ? strtoupper(trim($_POST['asistencia_tipo'])) : 'COMPLETO';
@@ -277,22 +455,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 
     $modulos_arr = isset($_POST['modulos']) && is_array($_POST['modulos']) ? $_POST['modulos'] : array();
-    // Sanitiza: solo fechas que existan en $fechas
+
     $validas = array();
     $fechas_map = array();
     for ($i = 0; $i < count($fechas); $i++) {
       $fechas_map[$fechas[$i]['fecha']] = true;
     }
+
     for ($i = 0; $i < count($modulos_arr); $i++) {
       $val = trim($modulos_arr[$i]);
       if (isset($fechas_map[$val]))
         $validas[] = $val;
     }
+
     if ($asistencia_tipo === 'MODULOS' && empty($validas)) {
-      // seguridad extra: si no hay válidas, forzamos completo
       $asistencia_tipo = 'COMPLETO';
+      $modulos_csv = '';
     } else {
-      $modulos_csv = implode(',', $validas); // guardamos fechas separadas por coma
+      $modulos_csv = implode(',', $validas);
     }
   } else {
     $asistencia_tipo = 'COMPLETO';
@@ -465,8 +645,49 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       'whatsapp_consent' => $whatsapp_consent     // 'SI' o 'NO'
     );
 
+    // =========================
+    // DEBUG LOCAL: no enviar correos, guardar HTML
+    // =========================
+    $MAIL_DEBUG = false; // <-- ponlo en false cuando estés en servidor
+
     $correo = new CorreoDenuncia();
-    $correo->sendConfirmacionInscripcion($nombre, $email_corporativo, $datosCorreo);
+
+    if ($MAIL_DEBUG) {
+      // Guardar un "preview" del correo en HTML para verlo en el navegador
+      $debugDir = dirname(__DIR__) . '/storage/mail_debug/';
+      if (!is_dir($debugDir)) {
+        @mkdir($debugDir, 0775, true);
+      }
+
+      // Intento 1: si tu clase tiene un método para generar HTML, úsalo (si no existe, cae al fallback)
+      $html = '';
+      if (method_exists($correo, 'buildConfirmacionInscripcionHtml')) {
+        $html = $correo->buildConfirmacionInscripcionHtml($nombre, $email_corporativo, $datosCorreo);
+      } elseif (method_exists($correo, 'renderConfirmacionInscripcion')) {
+        $html = $correo->renderConfirmacionInscripcion($nombre, $email_corporativo, $datosCorreo);
+      } else {
+        // Fallback: dejamos un dump bonito del payload para validar datos (mientras ajustamos la clase de correo)
+        $html = '<h2>DEBUG CORREO - Confirmación inscripción</h2>'
+          . '<pre style="white-space:pre-wrap;background:#111;color:#0f0;padding:16px;border-radius:12px">'
+          . htmlspecialchars(print_r($datosCorreo, true), ENT_QUOTES, 'UTF-8')
+          . '</pre>';
+      }
+
+      $fname = 'confirmacion_evento_' . (int) $evento['id'] . '_' . date('Ymd_His') . '.html';
+      file_put_contents($debugDir . $fname, $html);
+
+      // Mostrar link local
+      echo '<div style="padding:16px;font-family:Arial">';
+      echo '<h3>✅ Correo NO enviado (modo debug local)</h3>';
+      echo '<p>Se generó el preview aquí:</p>';
+      echo '<p><code>' . htmlspecialchars($debugDir . $fname, ENT_QUOTES, 'UTF-8') . '</code></p>';
+      echo '<p>Ábrelo desde el explorador de archivos (doble click) o compártemelo y lo afinamos.</p>';
+      echo '</div>';
+      exit;
+    } else {
+      // Producción: envío real
+      $correo->sendConfirmacionInscripcion($nombre, $email_corporativo, $datosCorreo);
+    }
 
     // === Aviso al comercial asignado al evento ===
     $com_email = '';
@@ -542,6 +763,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <h1 class="text-2xl font-bold text-[#942934] mb-4 text-center">
           Inscripción al evento: <?php echo htmlspecialchars($evento['nombre'], ENT_QUOTES, 'UTF-8'); ?>
         </h1>
+        <?php
+        $modLowUI = strtolower(trim($evento['modalidad'] ?? ''));
+        ?>
 
         <?php if ($mensaje_exito): ?>
           <div id="modalGracias" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -564,6 +788,29 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               </div>
             </div>
           </div>
+        <?php endif; ?>
+
+        <?php $mod = strtolower(trim($evento['modalidad'] ?? '')); ?>
+
+        <?php if ($mod === 'hibrida'): ?>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="p-4 border border-gray-300 rounded-xl bg-white">
+              <div class="font-bold text-[#942934] mb-2">📍 Fechas presenciales</div>
+              <?php echo pintarFechasHtml($fechas_presenciales); ?>
+            </div>
+
+            <div class="p-4 border border-gray-300 rounded-xl bg-white">
+              <div class="font-bold text-[#942934] mb-2">💻 Fechas virtuales</div>
+              <?php echo pintarFechasHtml($fechas_virtuales); ?>
+            </div>
+          </div>
+
+          <?php if (!empty($fechas_generales)): ?>
+            <div class="p-4 border border-yellow-300 rounded-xl bg-yellow-50 mb-4">
+              <div class="font-bold text-yellow-800 mb-2">⚠️ Fechas sin tipo (general)</div>
+              <?php echo pintarFechasHtml($fechas_generales); ?>
+            </div>
+          <?php endif; ?>
         <?php endif; ?>
 
         <form method="POST" onsubmit="return preEnviar(event)" enctype="multipart/form-data" class="space-y-4">
@@ -601,7 +848,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
           <input type="email" name="email_corporativo" placeholder="Email Corporativo" required
             class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
-          <?php $esVirtual = (strtolower($evento['modalidad']) === 'virtual'); ?>
+          <?php $modTmp = strtolower(trim($evento['modalidad'] ?? '')); ?>
+          <?php $esVirtual = ($modTmp === 'virtual'); ?>
           <?php if ($esVirtual && !empty($fechas)): ?>
             <div class="p-4 border border-gray-300 rounded-xl">
               <div class="font-semibold text-gray-800 mb-2">Asistencia</div>
@@ -792,12 +1040,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     (function () {
       var radios = document.getElementsByName('asistencia_tipo');
       var wrap = document.getElementById('wrap_modulos');
-      if (!radios || !wrap) return;
+
+      // ✅ ajuste: si NO existe la sección (no es virtual), salimos
+      if (!wrap || !radios || radios.length === 0) return;
 
       function toggleModulos() {
         var tipo = 'COMPLETO';
         for (var i = 0; i < radios.length; i++) { if (radios[i].checked) tipo = radios[i].value; }
-        wrap.className = (tipo === 'MODULOS') ? wrap.className.replace(' hidden', '') : (wrap.className.indexOf('hidden') >= 0 ? wrap.className : wrap.className + ' hidden');
+        wrap.className = (tipo === 'MODULOS')
+          ? wrap.className.replace(' hidden', '')
+          : (wrap.className.indexOf('hidden') >= 0 ? wrap.className : wrap.className + ' hidden');
       }
 
       for (var i = 0; i < radios.length; i++) {
@@ -805,17 +1057,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       }
       toggleModulos();
 
-      // Valida antes de enviar (complementa tu preEnviar)
       var form = document.querySelector('form[method="POST"]');
       if (form) {
         var _oldPreEnviar = window.preEnviar;
         window.preEnviar = function (evt) {
           if (typeof _oldPreEnviar === 'function') {
-            if (_oldPreEnviar(evt) === false) return false; // respeta tu validación previa
+            if (_oldPreEnviar(evt) === false) return false;
           }
-          // Si es "MODULOS", exigir 1+
+
           var tipo = 'COMPLETO';
           for (var i = 0; i < radios.length; i++) { if (radios[i].checked) tipo = radios[i].value; }
+
           if (tipo === 'MODULOS') {
             var checks = wrap.querySelectorAll('input[type="checkbox"]:checked');
             if (!checks || checks.length === 0) {

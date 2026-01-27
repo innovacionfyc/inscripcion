@@ -5,6 +5,18 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
+// === MODO PREVIEW LOCAL (no afecta producción) ===
+// === MODO PREVIEW LOCAL (no afecta producción) ===
+if (!defined('MAIL_PREVIEW')) {
+    define(
+        'MAIL_PREVIEW',
+        isset($_SERVER['HTTP_HOST']) &&
+        (
+            $_SERVER['HTTP_HOST'] === 'localhost' ||
+            $_SERVER['HTTP_HOST'] === '127.0.0.1'
+        )
+    );
+}
 class CorreoDenuncia
 {
 
