@@ -416,6 +416,16 @@ class CorreoDenuncia
                   <p style='margin:0 0 10px'>Gracias por sumarse a este espacio de aprendizaje. Su inscripción ha sido confirmada. A continuación, encontrará los detalles del evento:</p>
                 <p style='margin:0 0 12px'><strong>Modalidad:</strong> " . $modalidadTxt . "</p>
                 " . $asistHtml . "
+                " . (
+                !empty($data['autoestudio']) && (int) $data['autoestudio'] === 1
+                ? "<div style='margin:10px 0 14px; padding:12px; border:1px solid #bbf7d0; background:#ecfdf5; border-radius:10px;'>
+                         <strong style='color:#166534;'>📘 Este evento incluye Autoestudio</strong><br>
+                         <span style='color:#166534; font-size:13px;'>
+                           Recibirás el material correspondiente a través de los canales oficiales del evento.
+                         </span>
+                       </div>"
+                : ""
+            ) . "
 
                   <p style='margin:0 0 6px'><strong>📌 Fecha y Horario</strong></p>
                   " . ($resumenFechas ? "<p style='margin:0 0 8px'>📅 " . $resumenFechas . "</p>" : "") . "
@@ -454,7 +464,8 @@ class CorreoDenuncia
             $altNombreEvento = $data['nombre_evento'] ?? '';
             $altModalidad = $data['modalidad'] ?? '';
             $altResumen = strip_tags($resumenFechas);
-            $mail->AltBody = "Inscripción confirmada a {$altNombreEvento} ({$altModalidad}). Fechas: {$altResumen}." . $altAsist;
+            $altAuto = (!empty($data['autoestudio']) && (int) $data['autoestudio'] === 1) ? " Incluye Autoestudio." : "";
+            $mail->AltBody = "Inscripción confirmada a {$altNombreEvento} ({$altModalidad}). Fechas: {$altResumen}." . $altAsist . $altAuto;
 
             return $mail->send();
 

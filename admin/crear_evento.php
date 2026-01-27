@@ -58,6 +58,7 @@ if (!function_exists('guardarAdjuntos')) {
     for ($i = 0; $i < count($names); $i++) {
       if ($errs[$i] !== UPLOAD_ERR_OK)
         continue;
+
       $tmp = $tmps[$i];
       $name = $names[$i];
       $size = (int) $sizes[$i];
@@ -90,8 +91,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $modalidad = $_POST["modalidad"] ?? '';
   $fecha_limite = $_POST["fecha_limite"] ?? '';
   $comercial_id = $_POST["comercial_user_id"] ?? null;
+  $autoestudio = isset($_POST['autoestudio']) ? 1 : 0;
 
-  // === NUEVO: lugar personalizado (solo si modalidad es presencial y elige "Sí")
+  // ✅ OBJETIVO 2: Autoestudio + Trabajo integrador (flags)
+  $autoestudio = isset($_POST['autoestudio']) ? 1 : 0;
+  $trabajo_integrador = isset($_POST['trabajo_integrador']) ? 1 : 0;
+
+  // === lugar personalizado
   $cambiar_lugar = isset($_POST['cambiar_lugar']) ? strtoupper(trim($_POST['cambiar_lugar'])) : 'NO';
   $lugar_personalizado = null;
   if (strtolower($modalidad) === 'presencial' && $cambiar_lugar === 'SI') {
@@ -111,9 +117,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     move_uploaded_file($_FILES['imagen']['tmp_name'], $uploadsDir . $nombreImagen);
   }
 
-  // INSERT  (NUEVO: agregamos lugar_personalizado)
-  $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, lugar_personalizado, fecha_limite, comercial_user_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
-  $stmt->bind_param("ssssssi", $nombre, $slug, $nombreImagen, $modalidad, $lugar_personalizado, $fecha_limite, $comercial_id);
+  // INSERT (agrega autoestudio/trabajo_integrador)
+  $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, lugar_personalizado, fecha_limite, comercial_user_id, autoestudio) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+  $stmt->bind_param("ssssssii", $nombre, $slug, $nombreImagen, $modalidad, $lugar_personalizado, $fecha_limite, $comercial_id, $autoestudio);
 
   if ($stmt->execute()) {
     $evento_id = $stmt->insert_id;
@@ -141,10 +147,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $fecha = $fechasP[$i] ?? null;
         $hora_inicio = $hinP[$i] ?? null;
         $hora_fin = $hfinP[$i] ?? null;
-
-        if (!empty($fecha)) {
+        if (!empty($fecha))
           $stmt_fecha->execute();
-        }
       }
 
       // Virtuales
@@ -157,20 +161,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $fecha = $fechasV[$i] ?? null;
         $hora_inicio = $hinV[$i] ?? null;
         $hora_fin = $hfinV[$i] ?? null;
-
-        if (!empty($fecha)) {
+        if (!empty($fecha))
           $stmt_fecha->execute();
-        }
       }
 
     } else {
 
-      // Modalidad normal (como antes)
       $fechas = $_POST["fechas"] ?? [];
       $hin = $_POST["hora_inicio"] ?? [];
       $hfin = $_POST["hora_fin"] ?? [];
 
-      // guardamos tipo consistente
       $tipoNormal = ($modLow === 'presencial') ? 'presencial' : (($modLow === 'virtual') ? 'virtual' : 'general');
 
       for ($i = 0; $i < count($fechas); $i++) {
@@ -178,10 +178,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $fecha = $fechas[$i] ?? null;
         $hora_inicio = $hin[$i] ?? null;
         $hora_fin = $hfin[$i] ?? null;
-
-        if (!empty($fecha)) {
+        if (!empty($fecha))
           $stmt_fecha->execute();
-        }
       }
     }
 
@@ -191,24 +189,35 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $baseDocs = dirname(__DIR__) . '/docs';
     $modLow = strtolower(trim($modalidad));
 
-    if ($modLow === 'virtual') {
+    // === ADJUNTOS AUTOESTUDIO → docs/autoestudio/{evento_id}/ ===
+    if ((int) $autoestudio === 1) {
+      $destA = $baseDocs . '/autoestudio/' . (int) $evento_id;
+      guardarAdjuntos('docs_autoestudio', $destA);
+    }
 
+
+    if ($modLow === 'virtual') {
       $dest = $baseDocs . '/evento_virtual/' . (int) $evento_id;
       guardarAdjuntos('docs_virtual', $dest);
-
     } elseif ($modLow === 'presencial') {
-
       $dest = $baseDocs . '/evento_presencial/' . (int) $evento_id;
       guardarAdjuntos('docs_presencial', $dest);
-
     } elseif ($modLow === 'hibrida') {
-
-      // Híbrida: guarda ambos
       $destV = $baseDocs . '/evento_virtual/' . (int) $evento_id;
       guardarAdjuntos('docs_virtual', $destV);
 
       $destP = $baseDocs . '/evento_presencial/' . (int) $evento_id;
       guardarAdjuntos('docs_presencial', $destP);
+    }
+
+    // ✅ OBJETIVO 2: adjuntos autoestudio + trabajo integrador
+    if ($autoestudio) {
+      $destA = $baseDocs . '/autoestudio/' . (int) $evento_id;
+      guardarAdjuntos('docs_autoestudio', $destA);
+    }
+    if ($trabajo_integrador) {
+      $destT = $baseDocs . '/trabajo_integrador/' . (int) $evento_id;
+      guardarAdjuntos('docs_trabajo_integrador', $destT);
     }
 
     $conn->close();
@@ -294,78 +303,119 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
       </div>
 
       <div>
-        <label class="font-semibold text-gray-700">¿Cuántos días dura el evento?</label>
-        <select id="num_dias" class="w-full p-3 border border-gray-300 rounded-xl mt-2">
-          <option value="">Selecciona...</option>
-          <?php for ($i = 1; $i <= 10; $i++): ?>
-            <option value="<?php echo $i; ?>"><?php echo $i; ?> día<?php echo ($i > 1 ? 's' : ''); ?></option>
-          <?php endfor; ?>
-        </select>
-      </div>
-      <div id="dias_container" class="space-y-4"></div>
+        <!-- Normal (Presencial o Virtual): un solo número de días -->
+        <div id="wrap_num_dias_normal">
+          <label class="font-semibold text-gray-700">¿Cuántos días dura el evento?</label>
+          <select id="num_dias" class="w-full p-3 border border-gray-300 rounded-xl mt-2">
+            <option value="">Selecciona...</option>
+            <?php for ($i = 1; $i <= 10; $i++): ?>
+              <option value="<?php echo $i; ?>"><?php echo $i; ?> día<?php echo ($i > 1 ? 's' : ''); ?></option>
+            <?php endfor; ?>
+          </select>
+        </div>
+        <div id="dias_container" class="space-y-4"></div>
 
-      <!-- NUEVO: contenedores para modalidad Híbrida -->
-      <div id="dias_presencial_wrap" class="space-y-4 hidden">
-        <h3 class="text-lg font-bold text-gray-800">Fechas presenciales</h3>
-        <div id="dias_presencial_container" class="space-y-4"></div>
-      </div>
+        <!-- Híbrida: días independientes -->
+        <div id="wrap_num_dias_hibrida" class="hidden space-y-4">
+          <div>
+            <label class="font-semibold text-gray-700">¿Cuántos días PRESENCIALES?</label>
+            <select id="num_dias_presencial" class="w-full p-3 border border-gray-300 rounded-xl mt-2">
+              <option value="">Selecciona...</option>
+              <?php for ($i = 1; $i <= 10; $i++): ?>
+                <option value="<?php echo $i; ?>"><?php echo $i; ?> día<?php echo ($i > 1 ? 's' : ''); ?></option>
+              <?php endfor; ?>
+            </select>
+          </div>
 
-      <div id="dias_virtual_wrap" class="space-y-4 hidden">
-        <h3 class="text-lg font-bold text-gray-800">Fechas virtuales</h3>
-        <div id="dias_virtual_container" class="space-y-4"></div>
-      </div>
+          <div>
+            <label class="font-semibold text-gray-700">¿Cuántos días VIRTUALES?</label>
+            <select id="num_dias_virtual" class="w-full p-3 border border-gray-300 rounded-xl mt-2">
+              <option value="">Selecciona...</option>
+              <?php for ($i = 1; $i <= 10; $i++): ?>
+                <option value="<?php echo $i; ?>"><?php echo $i; ?> día<?php echo ($i > 1 ? 's' : ''); ?></option>
+              <?php endfor; ?>
+            </select>
+          </div>
+        </div>
 
-      <div>
-        <label class="font-semibold text-gray-700">Modalidad:</label>
-        <select name="modalidad" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
-          <option value="">Selecciona...</option>
-          <option value="Presencial">Presencial</option>
-          <option value="Virtual">Virtual</option>
-          <option value="Hibrida">Híbrida</option>
-        </select>
-      </div>
+        <div id="dias_presencial_wrap" class="space-y-4 hidden">
+          <h3 class="text-lg font-bold text-gray-800">Fechas presenciales</h3>
+          <div id="dias_presencial_container" class="space-y-4"></div>
+        </div>
 
-      <!-- NUEVO: Cambiar lugar para Presencial -->
-      <div id="wrapCambiarLugar" class="mt-3 p-4 border border-gray-200 rounded-xl hidden">
-        <div class="font-semibold mb-2">¿Deseas cambiar el lugar por defecto?</div>
-        <label class="inline-flex items-center gap-2 mr-4">
-          <input type="radio" id="lugar_si" name="cambiar_lugar" value="SI" class="accent-[#942934]">
-          Sí
-        </label>
-        <label class="inline-flex items-center gap-2">
-          <input type="radio" id="lugar_no" name="cambiar_lugar" value="NO" class="accent-[#942934]" checked>
-          No
-        </label>
+        <div id="dias_virtual_wrap" class="space-y-4 hidden">
+          <h3 class="text-lg font-bold text-gray-800">Fechas virtuales</h3>
+          <div id="dias_virtual_container" class="space-y-4"></div>
+        </div>
 
-        <textarea id="lugar_personalizado" name="lugar_personalizado"
-          class="mt-3 w-full p-3 border border-gray-300 rounded-xl" rows="3"
-          placeholder="Escribe aquí el lugar del evento" disabled></textarea>
-      </div>
+        <div class="mt-4">
+          <label class="font-semibold text-gray-700">Modalidad:</label>
+          <select name="modalidad" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
+            <option value="">Selecciona...</option>
+            <option value="Presencial">Presencial</option>
+            <option value="Virtual">Virtual</option>
+            <option value="Hibrida">Híbrida</option>
+          </select>
+        </div>
 
-      <!-- Adjuntos para VIRTUAL -->
-      <div id="docs_virtual_wrap" style="display:none; margin-top:12px;">
-        <label class="block font-semibold mb-1">Adjuntos para evento virtual</label>
-        <input type="file" name="docs_virtual[]" multiple class="w-full p-3 border border-gray-300 rounded-xl">
-        <small class="text-gray-500">Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB c/u.</small>
-      </div>
+        <!-- Cambiar lugar -->
+        <div id="wrapCambiarLugar" class="mt-3 p-4 border border-gray-200 rounded-xl hidden">
+          <div class="font-semibold mb-2">¿Deseas cambiar el lugar por defecto?</div>
+          <label class="inline-flex items-center gap-2 mr-4">
+            <input type="radio" id="lugar_si" name="cambiar_lugar" value="SI" class="accent-[#942934]">
+            Sí
+          </label>
+          <label class="inline-flex items-center gap-2">
+            <input type="radio" id="lugar_no" name="cambiar_lugar" value="NO" class="accent-[#942934]" checked>
+            No
+          </label>
 
-      <!-- Adjuntos para PRESENCIAL -->
-      <div id="docs_presencial_wrap" style="display:none; margin-top:12px;">
-        <label class="block font-semibold mb-1">Adjuntos para evento presencial</label>
-        <input type="file" name="docs_presencial[]" multiple class="w-full p-3 border border-gray-300 rounded-xl">
-        <small class="text-gray-500">Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB c/u.</small>
-      </div>
+          <textarea id="lugar_personalizado" name="lugar_personalizado"
+            class="mt-3 w-full p-3 border border-gray-300 rounded-xl" rows="3"
+            placeholder="Escribe aquí el lugar del evento" disabled></textarea>
+        </div>
 
-      <div>
-        <label class="font-semibold text-gray-700">Fecha límite para confirmar asistencia:</label>
-        <input type="date" name="fecha_limite" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
-      </div>
+        <!-- Adjuntos modalidad -->
+        <div id="docs_virtual_wrap" style="display:none; margin-top:12px;">
+          <label class="block font-semibold mb-1">Adjuntos para evento virtual</label>
+          <input type="file" name="docs_virtual[]" multiple class="w-full p-3 border border-gray-300 rounded-xl">
+          <small class="text-gray-500">Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB c/u.</small>
+        </div>
 
-      <div class="text-center">
-        <button type="submit"
-          class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 px-8 rounded-xl transition-all">
-          Crear evento
-        </button>
+        <div id="docs_presencial_wrap" style="display:none; margin-top:12px;">
+          <label class="block font-semibold mb-1">Adjuntos para evento presencial</label>
+          <input type="file" name="docs_presencial[]" multiple class="w-full p-3 border border-gray-300 rounded-xl">
+          <small class="text-gray-500">Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB c/u.</small>
+        </div>
+
+        <!-- ✅ OBJETIVO 2 -->
+        <div class="mt-4 p-4 border border-gray-200 rounded-xl">
+          <div class="font-semibold text-gray-700 mb-2">Autoestudio y trabajo integrador</div>
+
+          <label class="inline-flex items-center gap-2">
+            <input type="checkbox" id="autoestudio" name="autoestudio" value="1" class="accent-[#942934]">
+            Incluye Autoestudio y trabajo integrador
+          </label>
+
+          <div id="wrap_autoestudio_files" class="mt-3 hidden">
+            <label class="block font-semibold mb-1">Adjuntos de Autoestudio</label>
+            <input type="file" name="docs_autoestudio[]" multiple class="w-full p-3 border border-gray-300 rounded-xl">
+            <small class="text-gray-500">Puedes adjuntar guías, PDFs, etc.</small>
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <label class="font-semibold text-gray-700">Fecha límite para confirmar asistencia:</label>
+          <input type="date" name="fecha_limite" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
+        </div>
+
+        <div class="text-center mt-4">
+          <button type="submit"
+            class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold py-3 px-8 rounded-xl transition-all">
+            Crear evento
+          </button>
+        </div>
+
       </div>
     </form>
   </div>
@@ -376,38 +426,53 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
     (function () {
       function fycGetModalidad() {
         var sel = document.querySelector('select[name="modalidad"], #modalidad');
-        if (sel && typeof sel.value !== 'undefined') {
-          return String(sel.value || '').toLowerCase();
-        }
-        var r = document.querySelector('input[name="modalidad"]:checked');
-        return r ? String(r.value || '').toLowerCase() : '';
+        if (sel && typeof sel.value !== 'undefined') return String(sel.value || '').toLowerCase();
+        return '';
       }
 
       var DEF_LUGAR = <?php echo json_encode($DEFAULT_LUGAR_PRESENCIAL); ?>;
 
       function fycToggleAdjuntosYLugar() {
         var v = fycGetModalidad();
+
         var vWrap = document.getElementById('docs_virtual_wrap');
         var pWrap = document.getElementById('docs_presencial_wrap');
         if (vWrap) vWrap.style.display = (v === 'virtual' || v === 'hibrida') ? 'block' : 'none';
         if (pWrap) pWrap.style.display = (v === 'presencial' || v === 'hibrida') ? 'block' : 'none';
 
-        // ===== NUEVO: Mostrar 2 bloques de fechas si es híbrida =====
+        // wrappers días
+        var wrapNormal = document.getElementById('wrap_num_dias_normal');
+        var wrapH = document.getElementById('wrap_num_dias_hibrida');
+
         var diasNormal = document.getElementById('dias_container');
         var presWrap = document.getElementById('dias_presencial_wrap');
         var virtWrap = document.getElementById('dias_virtual_wrap');
 
+        // Limpieza selects para no mezclar
+        var selN = document.getElementById('num_dias');
+        var selP = document.getElementById('num_dias_presencial');
+        var selV = document.getElementById('num_dias_virtual');
+
         if (v === 'hibrida') {
+          if (wrapNormal) wrapNormal.classList.add('hidden');
+          if (wrapH) wrapH.classList.remove('hidden');
+
+          if (selN) selN.value = '';
           if (diasNormal) diasNormal.classList.add('hidden');
           if (presWrap) presWrap.classList.remove('hidden');
           if (virtWrap) virtWrap.classList.remove('hidden');
         } else {
+          if (wrapNormal) wrapNormal.classList.remove('hidden');
+          if (wrapH) wrapH.classList.add('hidden');
+
+          if (selP) selP.value = '';
+          if (selV) selV.value = '';
           if (diasNormal) diasNormal.classList.remove('hidden');
           if (presWrap) presWrap.classList.add('hidden');
           if (virtWrap) virtWrap.classList.add('hidden');
         }
 
-        // NUEVO: mostrar bloque cambiar lugar solo en presencial
+        // mostrar bloque cambiar lugar
         var lugarWrap = document.getElementById('wrapCambiarLugar');
         var rSi = document.getElementById('lugar_si');
         var rNo = document.getElementById('lugar_no');
@@ -416,55 +481,78 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         if (lugarWrap) {
           if (v === 'presencial' || v === 'hibrida') {
             lugarWrap.classList.remove('hidden');
-            // Habilitar/Deshabilitar textarea según radio
             var si = rSi && rSi.checked;
             if (ta) {
               ta.disabled = !si;
-              if (si && !ta.value) ta.value = DEF_LUGAR; // precargar si está vacío
-              if (!si && ta.value === DEF_LUGAR) ta.value = ''; // si desactiva, limpiamos el default
+              if (si && !ta.value) ta.value = DEF_LUGAR;
+              if (!si && ta.value === DEF_LUGAR) ta.value = '';
             }
           } else {
             lugarWrap.classList.add('hidden');
-            if (ta) { ta.disabled = true; /* opcional: ta.value = ''; */ }
+            if (ta) ta.disabled = true;
             if (rNo) rNo.checked = true;
             if (rSi) rSi.checked = false;
           }
         }
+
+        if (typeof window.__renderDias === 'function') window.__renderDias();
       }
 
       function fycBind() {
         var sel = document.querySelector('select[name="modalidad"], #modalidad');
         if (sel) sel.addEventListener('change', fycToggleAdjuntosYLugar);
 
-        var radios = document.querySelectorAll('input[name="modalidad"]');
-        for (var i = 0; i < radios.length; i++) {
-          radios[i].addEventListener('change', fycToggleAdjuntosYLugar);
-        }
-
         var rSi = document.getElementById('lugar_si');
         var rNo = document.getElementById('lugar_no');
         if (rSi) rSi.addEventListener('change', fycToggleAdjuntosYLugar);
         if (rNo) rNo.addEventListener('change', fycToggleAdjuntosYLugar);
 
-        fycToggleAdjuntosYLugar(); // inicial
+        fycToggleAdjuntosYLugar();
+      }
+
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fycBind);
+      else fycBind();
+    })();
+
+    // ✅ OBJETIVO 2: Toggle adjuntos Autoestudio
+    (function () {
+      function toggleAutoestudio() {
+        var chk = document.getElementById('autoestudio');
+        var wrap = document.getElementById('wrap_autoestudio_files');
+        if (!chk || !wrap) return;
+
+        if (chk.checked) {
+          wrap.classList.remove('hidden');
+        } else {
+          wrap.classList.add('hidden');
+
+          // opcional: limpiar archivos seleccionados
+          var input = wrap.querySelector('input[type="file"]');
+          if (input) input.value = '';
+        }
+      }
+
+      function bindAutoestudio() {
+        var chk = document.getElementById('autoestudio');
+        if (chk) chk.addEventListener('change', toggleAutoestudio);
+        toggleAutoestudio(); // estado inicial
       }
 
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', fycBind);
+        document.addEventListener('DOMContentLoaded', bindAutoestudio);
       } else {
-        fycBind();
+        bindAutoestudio();
       }
     })();
 
-    // ===== Generador de días/horarios (soporta híbrida) =====
+    // ===== Generador de días/horarios (soporta híbrida con días independientes) =====
     (function () {
       function byId(id) { return document.getElementById(id); }
 
       function getModalidadLower() {
         var sel = document.querySelector('select[name="modalidad"], #modalidad');
         if (sel && typeof sel.value !== 'undefined') return String(sel.value || '').toLowerCase();
-        var r = document.querySelector('input[name="modalidad"]:checked');
-        return r ? String(r.value || '').toLowerCase() : '';
+        return '';
       }
 
       function buildRowsHTML(n, prefix, old) {
@@ -473,18 +561,18 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           var ov = (old && old[j]) ? old[j] : { f: '', hi: '', hf: '' };
           html += ''
             + '<div class="fyc-dia-row grid grid-cols-1 md:grid-cols-3 gap-3">'
-            + '<div>'
-            + '<label class="block text-sm font-medium mb-1">Fecha día ' + (j + 1) + '</label>'
-            + '<input type="date" name="fechas_' + prefix + '[]" value="' + ov.f + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
-            + '</div>'
-            + '<div>'
-            + '<label class="block text-sm font-medium mb-1">Hora inicio</label>'
-            + '<input type="time" name="hora_inicio_' + prefix + '[]" value="' + ov.hi + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
-            + '</div>'
-            + '<div>'
-            + '<label class="block text-sm font-medium mb-1">Hora fin</label>'
-            + '<input type="time" name="hora_fin_' + prefix + '[]" value="' + ov.hf + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
-            + '</div>'
+            + '  <div>'
+            + '    <label class="block text-sm font-medium mb-1">Fecha día ' + (j + 1) + '</label>'
+            + '    <input type="date" name="fechas_' + prefix + '[]" value="' + ov.f + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '  </div>'
+            + '  <div>'
+            + '    <label class="block text-sm font-medium mb-1">Hora inicio</label>'
+            + '    <input type="time" name="hora_inicio_' + prefix + '[]" value="' + ov.hi + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '  </div>'
+            + '  <div>'
+            + '    <label class="block text-sm font-medium mb-1">Hora fin</label>'
+            + '    <input type="time" name="hora_fin_' + prefix + '[]" value="' + ov.hf + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '  </div>'
             + '</div>';
         }
         return html;
@@ -505,107 +593,108 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
       }
 
       function renderDias() {
-        var sel = byId('num_dias');
-        if (!sel) return;
-
-        var n = parseInt(sel.value, 10);
-        if (!n || n < 1) {
-          // limpiar
-          var normal = byId('dias_container');
-          var pres = byId('dias_presencial_container');
-          var virt = byId('dias_virtual_container');
-          if (normal) normal.innerHTML = '';
-          if (pres) pres.innerHTML = '';
-          if (virt) virt.innerHTML = '';
-          return;
-        }
-
         var modalidad = getModalidadLower();
 
-        // Normal (presencial o virtual)
         var normalWrap = byId('dias_container');
-
-        // Híbrida
         var presWrap = byId('dias_presencial_container');
         var virtWrap = byId('dias_virtual_container');
 
         if (modalidad === 'hibrida') {
-          // Guardar valores existentes (no perder lo digitado)
-          var oldPres = readOldValues('dias_presencial_container', 'presencial');
-          var oldVirt = readOldValues('dias_virtual_container', 'virtual');
+          var selP = byId('num_dias_presencial');
+          var selV = byId('num_dias_virtual');
+          var nP = selP ? parseInt(selP.value, 10) : 0;
+          var nV = selV ? parseInt(selV.value, 10) : 0;
 
-          if (presWrap) presWrap.innerHTML = buildRowsHTML(n, 'presencial', oldPres);
-          if (virtWrap) virtWrap.innerHTML = buildRowsHTML(n, 'virtual', oldVirt);
+          if (!nP || nP < 1) {
+            if (presWrap) presWrap.innerHTML = '';
+          } else {
+            var oldPres = readOldValues('dias_presencial_container', 'presencial');
+            if (presWrap) presWrap.innerHTML = buildRowsHTML(nP, 'presencial', oldPres);
+          }
 
-          // por si acaso, limpiar el normal (ya está oculto)
+          if (!nV || nV < 1) {
+            if (virtWrap) virtWrap.innerHTML = '';
+          } else {
+            var oldVirt = readOldValues('dias_virtual_container', 'virtual');
+            if (virtWrap) virtWrap.innerHTML = buildRowsHTML(nV, 'virtual', oldVirt);
+          }
+
           if (normalWrap) normalWrap.innerHTML = '';
+          return;
+        }
 
-        } else {
-          // Guardar valores existentes
-          var old = [];
-          if (normalWrap) {
-            var rows = normalWrap.getElementsByClassName('fyc-dia-row');
-            for (var i = 0; i < rows.length; i++) {
-              var f = rows[i].querySelector('input[name="fechas[]"]');
-              var hi = rows[i].querySelector('input[name="hora_inicio[]"]');
-              var hf = rows[i].querySelector('input[name="hora_fin[]"]');
-              old.push({ f: f ? f.value : '', hi: hi ? hi.value : '', hf: hf ? hf.value : '' });
-            }
-          }
+        var sel = byId('num_dias');
+        var n = sel ? parseInt(sel.value, 10) : 0;
 
-          // Render normal con los mismos name="fechas[]"
-          var html = '';
-          for (var j = 0; j < n; j++) {
-            var ov = old[j] || { f: '', hi: '', hf: '' };
-            html += ''
-              + '<div class="fyc-dia-row grid grid-cols-1 md:grid-cols-3 gap-3">'
-              + '<div>'
-              + '<label class="block text-sm font-medium mb-1">Fecha día ' + (j + 1) + '</label>'
-              + '<input type="date" name="fechas[]" value="' + ov.f + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
-              + '</div>'
-              + '<div>'
-              + '<label class="block text-sm font-medium mb-1">Hora inicio</label>'
-              + '<input type="time" name="hora_inicio[]" value="' + ov.hi + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
-              + '</div>'
-              + '<div>'
-              + '<label class="block text-sm font-medium mb-1">Hora fin</label>'
-              + '<input type="time" name="hora_fin[]" value="' + ov.hf + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
-              + '</div>'
-              + '</div>';
-          }
-          if (normalWrap) normalWrap.innerHTML = html;
-
-          // limpiar híbrida por si venías de híbrida
+        if (!n || n < 1) {
+          if (normalWrap) normalWrap.innerHTML = '';
           if (presWrap) presWrap.innerHTML = '';
           if (virtWrap) virtWrap.innerHTML = '';
+          return;
         }
+
+        var old = [];
+        if (normalWrap) {
+          var rows = normalWrap.getElementsByClassName('fyc-dia-row');
+          for (var i = 0; i < rows.length; i++) {
+            var f = rows[i].querySelector('input[name="fechas[]"]');
+            var hi = rows[i].querySelector('input[name="hora_inicio[]"]');
+            var hf = rows[i].querySelector('input[name="hora_fin[]"]');
+            old.push({ f: f ? f.value : '', hi: hi ? hi.value : '', hf: hf ? hf.value : '' });
+          }
+        }
+
+        var html = '';
+        for (var j = 0; j < n; j++) {
+          var ov = old[j] || { f: '', hi: '', hf: '' };
+          html += ''
+            + '<div class="fyc-dia-row grid grid-cols-1 md:grid-cols-3 gap-3">'
+            + '  <div>'
+            + '    <label class="block text-sm font-medium mb-1">Fecha día ' + (j + 1) + '</label>'
+            + '    <input type="date" name="fechas[]" value="' + ov.f + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '  </div>'
+            + '  <div>'
+            + '    <label class="block text-sm font-medium mb-1">Hora inicio</label>'
+            + '    <input type="time" name="hora_inicio[]" value="' + ov.hi + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '  </div>'
+            + '  <div>'
+            + '    <label class="block text-sm font-medium mb-1">Hora fin</label>'
+            + '    <input type="time" name="hora_fin[]" value="' + ov.hf + '" class="w-full p-3 border border-gray-300 rounded-xl" required>'
+            + '  </div>'
+            + '</div>';
+        }
+
+        if (normalWrap) normalWrap.innerHTML = html;
+        if (presWrap) presWrap.innerHTML = '';
+        if (virtWrap) virtWrap.innerHTML = '';
       }
+
+      window.__renderDias = renderDias;
 
       function bindDias() {
         var sel = byId('num_dias');
         if (sel) sel.addEventListener('change', renderDias);
 
-        // Cuando cambie modalidad, re-render para cambiar a híbrida o normal sin perder select
+        var selP = byId('num_dias_presencial');
+        var selV = byId('num_dias_virtual');
+        if (selP) selP.addEventListener('change', renderDias);
+        if (selV) selV.addEventListener('change', renderDias);
+
         var modSel = document.querySelector('select[name="modalidad"], #modalidad');
         if (modSel) modSel.addEventListener('change', renderDias);
-
-        var radios = document.querySelectorAll('input[name="modalidad"]');
-        for (var i = 0; i < radios.length; i++) radios[i].addEventListener('change', renderDias);
 
         renderDias();
       }
 
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bindDias);
-      } else {
-        bindDias();
-      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindDias);
+      else bindDias();
     })();
 
     function copiarURL() {
       var input = document.getElementById('urlFormulario');
       var msg = document.getElementById('mensajeCopiado');
       var texto = input.value;
+
       if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(texto).then(function () {
           msg.classList.remove('hidden');
@@ -614,6 +703,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
       } else {
         fallbackCopy();
       }
+
       function fallbackCopy() {
         input.select();
         try {

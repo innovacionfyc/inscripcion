@@ -21,10 +21,10 @@ if ($slug === '') {
 // -----------------------------
 $evento = null;
 
-$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre, lugar_personalizado FROM eventos WHERE slug = ? LIMIT 1');
+$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre, lugar_personalizado, autoestudio FROM eventos WHERE slug = ? LIMIT 1');
 $stmt->bind_param('s', $slug);
 $stmt->execute();
-$stmt->bind_result($ev_id, $ev_nombre, $ev_imagen, $ev_modalidad, $ev_fecha_limite, $ev_wa, $ev_firma, $ev_encargado, $ev_lugar);
+$stmt->bind_result($ev_id, $ev_nombre, $ev_imagen, $ev_modalidad, $ev_fecha_limite, $ev_wa, $ev_firma, $ev_encargado, $ev_lugar, $ev_autoestudio);
 if ($stmt->fetch()) {
   $evento = array(
     'id' => $ev_id,
@@ -35,7 +35,8 @@ if ($stmt->fetch()) {
     'whatsapp_numero' => $ev_wa,
     'firma_imagen' => $ev_firma,
     'encargado_nombre' => $ev_encargado,
-    'lugar_personalizado' => $ev_lugar
+    'lugar_personalizado' => $ev_lugar,
+    'autoestudio' => (int) $ev_autoestudio
   );
 }
 $stmt->close();
@@ -620,6 +621,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       'evento_id' => (int) $evento['id'],
       'nombre_evento' => $evento['nombre'],
       'modalidad' => $evento['modalidad'],
+      'autoestudio' => (int) ($evento['autoestudio'] ?? 0),
       'fecha_limite' => $evento['fecha_limite'],
       'resumen_fechas' => $resumen_fechas,
       'detalle_horario' => $detalle_horario,
@@ -756,7 +758,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
   <div style="max-width:1500px; margin:0 auto; padding:24px 16px;">
     <div class="bg-white rounded-2xl shadow-2xl" style="width:100%; max-width:1080px; margin:0 auto; padding:28px;">
-
       <?php if ($evento): ?>
         <img src="<?php echo htmlspecialchars('../uploads/eventos/' . $evento['imagen'], ENT_QUOTES, 'UTF-8'); ?>"
           alt="Imagen del evento" class="w-full h-48 md:h-64 lg:h-72 xl:h-80 object-cover rounded-xl mb-4 md:mb-6">
@@ -812,6 +813,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             </div>
           <?php endif; ?>
         <?php endif; ?>
+        <?php if (!empty($evento['autoestudio']) && (int) $evento['autoestudio'] === 1): ?>
+          <div class="mb-4 p-4 border border-gray-300 rounded-xl bg-green-50">
+            <div class="font-bold text-green-800">✅ Este evento incluye Autoestudio</div>
+            <div class="text-sm text-green-700 mt-1">
+              Recibirás la información correspondiente en los canales oficiales del evento.
+            </div>
+          </div>
+        <?php endif; ?>
+
 
         <form method="POST" onsubmit="return preEnviar(event)" enctype="multipart/form-data" class="space-y-4">
           <input type="hidden" name="evento_id" value="<?php echo (int) $evento['id']; ?>">
