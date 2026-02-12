@@ -46,6 +46,17 @@ if ($evento_id <= 0) {
   exit;
 }
 
+// ✅ Filtro/orden (definir antes del HTML para evitar warnings)
+$estadoFiltro = isset($_GET['estado']) ? strtolower(trim($_GET['estado'])) : '';
+$sort = isset($_GET['sort']) ? strtolower(trim($_GET['sort'])) : '';
+
+$permitidosFiltro = array('', 'inscrito', 'no_asiste', 'pendiente_confirmacion', 'no_contesta');
+if (!in_array($estadoFiltro, $permitidosFiltro, true))
+  $estadoFiltro = '';
+if ($sort !== 'estado')
+  $sort = ''; // solo permitimos 'estado' o vacío
+
+
 /* ====== Eliminar inscrito (solo ADMIN) ====== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['accion'] === 'eliminar') {
   if (!$es_admin) {
@@ -74,6 +85,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
     $stmtD->close();
   }
   header("Location: inscritos.php?evento_id=" . $evento_id);
+  exit;
+}
+
+/* ====== Actualizar estado de contacto (todos los roles o solo admin: tú decides) ====== */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['accion'] === 'estado_contacto') {
+
+  // Si quieres que SOLO admin pueda cambiarlo, descomenta:
+  // if (!$es_admin) { http_response_code(403); echo "No autorizado"; exit; }
+
+  $inscrito_id = isset($_POST['inscrito_id']) ? (int) $_POST['inscrito_id'] : 0;
+  $nuevo = isset($_POST['estado_contacto']) ? strtolower(trim($_POST['estado_contacto'])) : '';
+
+  $permitidos = array('inscrito', 'no_asiste', 'pendiente_confirmacion', 'no_contesta');
+  if ($inscrito_id > 0 && in_array($nuevo, $permitidos, true)) {
+    $stmtU = $conn->prepare("UPDATE inscritos SET estado_contacto = ? WHERE id = ? AND evento_id = ? LIMIT 1");
+    $stmtU->bind_param("sii", $nuevo, $inscrito_id, $evento_id);
+    $stmtU->execute();
+    $stmtU->close();
+  }
+
+  // Mantener filtros al volver (si vienen en GET)
+  $qs = "evento_id=" . $evento_id;
+  if (isset($_GET['estado']) && $_GET['estado'] !== '')
+    $qs .= "&estado=" . urlencode($_GET['estado']);
+  if (isset($_GET['sort']) && $_GET['sort'] !== '')
+    $qs .= "&sort=" . urlencode($_GET['sort']);
+
+  header("Location: inscritos.php?" . $qs);
   exit;
 }
 
@@ -356,12 +395,33 @@ function format_asistencia($tipo, $mods_csv, $fechas_map)
   return '—';
 }
 
+function row_class_by_estado($estado)
+{
+  $estado = strtolower(trim((string) $estado));
+
+  if ($estado === 'inscrito')
+    return 'bg-green-200 hover:bg-green-300';
+
+  if ($estado === 'no_asiste')
+    return 'bg-red-200 hover:bg-red-300';
+
+  if ($estado === 'pendiente_confirmacion')
+    return 'bg-yellow-200 hover:bg-yellow-300';
+
+  if ($estado === 'no_contesta')
+    return 'bg-orange-200 hover:bg-orange-300';
+
+  return 'bg-yellow-200 hover:bg-yellow-300';
+}
+
+
+
 /* ====== Inscritos (con campos nuevos) ====== */
 $inscritos = array();
 $stmt = $conn->prepare("SELECT 
                           id, tipo_inscripcion, nombre, cedula, cargo, entidad, celular, ciudad, 
                           email_personal, email_corporativo, medio, soporte_pago,
-                          asistencia_tipo, modulos_seleccionados, whatsapp_consent, fecha_registro
+                          asistencia_tipo, modulos_seleccionados, whatsapp_consent, fecha_registro, estado_contacto 
                         FROM inscritos
                         WHERE evento_id = ?
                         ORDER BY id DESC");
@@ -383,7 +443,8 @@ $stmt->bind_result(
   $asis_tipo,
   $mods_csv,
   $wa_consent,
-  $f_reg
+  $f_reg,
+  $estado_contacto
 );
 while ($stmt->fetch()) {
   $inscritos[] = array(
@@ -402,10 +463,44 @@ while ($stmt->fetch()) {
     'asistencia_tipo' => $asis_tipo,
     'modulos_seleccionados' => $mods_csv,
     'whatsapp_consent' => $wa_consent,
-    'fecha_registro' => $f_reg
+    'fecha_registro' => $f_reg,
+    'estado_contacto' => $estado_contacto
+
   );
 }
 $stmt->close();
+// Normalizar estado por defecto si viene vacío
+for ($i = 0; $i < count($inscritos); $i++) {
+  $v = strtolower(trim((string) ($inscritos[$i]['estado_contacto'] ?? '')));
+  if ($v === '')
+    $v = 'pendiente_confirmacion';
+  $inscritos[$i]['estado_contacto'] = $v;
+}
+
+// Filtro en PHP
+if (!empty($estadoFiltro)) {
+  $inscritos = array_values(array_filter($inscritos, function ($r) use ($estadoFiltro) {
+    return strtolower((string) $r['estado_contacto']) === $estadoFiltro;
+  }));
+}
+
+// Orden por estado (opcional)
+if ($sort === 'estado') {
+  $prio = array(
+    'pendiente_confirmacion' => 1,
+    'no_contesta' => 2,
+    'inscrito' => 3,
+    'no_asiste' => 4,
+  );
+  usort($inscritos, function ($a, $b) use ($prio) {
+    $pa = $prio[$a['estado_contacto']] ?? 99;
+    $pb = $prio[$b['estado_contacto']] ?? 99;
+    if ($pa === $pb)
+      return ($b['id'] ?? 0) <=> ($a['id'] ?? 0);
+    return $pa <=> $pb;
+  });
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -441,35 +536,97 @@ $stmt->close();
       Comercial: <strong><?php echo htmlspecialchars($evento['comercial'] ?: '—', ENT_QUOTES, 'UTF-8'); ?></strong>
     </p>
 
+    <?php
+    $permitidosFiltro = array('', 'inscrito', 'no_asiste', 'pendiente_confirmacion', 'no_contesta');
+    if (!in_array($estadoFiltro, $permitidosFiltro, true))
+      $estadoFiltro = '';
+
+    function estado_label($v)
+    {
+      $v = strtolower((string) $v);
+      if ($v === 'inscrito')
+        return 'Inscrito';
+      if ($v === 'no_asiste')
+        return 'No asiste';
+      if ($v === 'pendiente_confirmacion')
+        return 'Pendiente confirmación';
+      if ($v === 'no_contesta')
+        return 'No contesta';
+      return 'Pendiente confirmación';
+    }
+    ?>
+    <div class="mb-4 flex flex-col md:flex-row gap-3 md:items-end">
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Filtrar por estado</label>
+        <select id="filtroEstado" class="p-2 border border-gray-300 rounded-lg text-sm">
+          <option value="">Todos</option>
+          <option value="inscrito" <?php echo $estadoFiltro === 'inscrito' ? 'selected' : ''; ?>>Inscrito</option>
+          <option value="no_asiste" <?php echo $estadoFiltro === 'no_asiste' ? 'selected' : ''; ?>>No asiste</option>
+          <option value="pendiente_confirmacion" <?php echo $estadoFiltro === 'pendiente_confirmacion' ? 'selected' : ''; ?>>
+            Pendiente confirmación</option>
+          <option value="no_contesta" <?php echo $estadoFiltro === 'no_contesta' ? 'selected' : ''; ?>>No contesta
+          </option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Ordenar</label>
+        <select id="sortEstado" class="p-2 border border-gray-300 rounded-lg text-sm">
+          <option value="">Por ID (recientes)</option>
+          <option value="estado" <?php echo $sort === 'estado' ? 'selected' : ''; ?>>Por estado</option>
+        </select>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var ev = <?php echo (int) $evento_id; ?>;
+        var estado = document.getElementById('filtroEstado');
+        var sort = document.getElementById('sortEstado');
+
+        function go() {
+          var qs = new URLSearchParams();
+          qs.set('evento_id', ev);
+          if (estado.value) qs.set('estado', estado.value);
+          if (sort.value) qs.set('sort', sort.value);
+          window.location.href = 'inscritos.php?' + qs.toString();
+        }
+        estado.addEventListener('change', go);
+        sort.addEventListener('change', go);
+      })();
+    </script>
+
+
     <div class="bg-white rounded-2xl shadow-2xl p-5 overflow-x-auto">
-      <table class="min-w-full text-xs md:text-sm">
+      <table class="min-w-full text-xs">
         <thead>
           <tr class="text-left border-b">
-            <th class="py-2 pr-3">#</th>
-            <th class="py-2 pr-3">Nombre</th>
-            <th class="py-2 pr-3">Cédula</th>
-            <th class="py-2 pr-3">Entidad</th>
-            <th class="py-2 pr-3">Cargo</th>
-            <th class="py-2 pr-3">Ciudad</th>
-            <th class="py-2 pr-3">Celular</th>
-            <th class="py-2 pr-3">Email</th>
-            <th class="py-2 pr-3">Tipo</th>
-            <th class="py-2 pr-3">Asistencia</th>
-            <th class="py-2 pr-3">Fecha de inscripción</th>
-            <th class="py-2 pr-3">WhatsApp</th>
-            <th class="py-2 pr-3">Soporte de Asistencia</th>
-            <th class="py-2 pr-3">Acciones</th>
+            <th class="py-1 pr-2">#</th>
+            <th class="py-1 px-2">Nombre</th>
+            <th class="py-1 px-2">Cédula</th>
+            <th class="py-1 px-2">Entidad</th>
+            <th class="py-1 px-2">Cargo</th>
+            <th class="py-1 px-2">Ciudad</th>
+            <th class="py-1 px-2">Celular</th>
+            <th class="py-1 px-2">Email</th>
+            <th class="py-1 px-2">Tipo</th>
+            <th class="py-1 px-2">Asistencia</th>
+            <th class="py-1 px-2">Fecha de inscripción</th>
+            <th class="py-1 px-2">WhatsApp</th>
+            <th class="py-1 px-2">Estado</th>
+            <th class="py-1 px-2">Soporte de Asistencia</th>
+            <th class="py-1 px-2">Acciones</th>
           </tr>
         </thead>
         <tbody>
           <?php if (empty($inscritos)): ?>
             <tr>
-              <td colspan="14" class="py-4 text-center text-gray-500">Sin inscritos aún</td>
+              <td colspan="15" class="py-4 text-center text-gray-500">Sin inscritos aún</td>
             </tr>
           <?php else: ?>
             <?php $n = 1;
             foreach ($inscritos as $r): ?>
-              <tr class="border-b hover:bg-gray-50">
+              <tr class="border-b <?php echo row_class_by_estado($r['estado_contacto'] ?? 'pendiente_confirmacion'); ?>">
                 <td class="py-2 pr-3"><?php echo $n++; ?></td>
                 <td class="py-2 pr-3 font-medium"><?php echo htmlspecialchars($r['nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td class="py-2 pr-3"><?php echo htmlspecialchars($r['cedula'], ENT_QUOTES, 'UTF-8'); ?></td>
@@ -519,6 +676,27 @@ $stmt->close();
                   $w = strtoupper((string) $r['whatsapp_consent']);
                   echo ($w === 'SI' || $w === 'NO') ? $w : '—';
                   ?>
+                </td>
+
+                <!-- Estado -->
+                <td class="py-2 pr-3">
+                  <form method="POST" class="estadoForm">
+                    <input type="hidden" name="accion" value="estado_contacto">
+                    <input type="hidden" name="inscrito_id" value="<?php echo (int) $r['id']; ?>">
+
+                    <select name="estado_contacto" class="text-xs md:text-sm p-2 rounded-lg border border-gray-300 bg-white"
+                      onchange="this.form.submit()">
+                      <option value="inscrito" <?php echo (($r['estado_contacto'] ?? '') === 'inscrito') ? 'selected' : ''; ?>>🟢
+                        Inscrito
+                      </option>
+                      <option value="no_asiste" <?php echo (($r['estado_contacto'] ?? '') === 'no_asiste') ? 'selected' : ''; ?>>🔴 No
+                        asiste</option>
+                      <option value="pendiente_confirmacion" <?php echo (($r['estado_contacto'] ?? '') === 'pendiente_confirmacion') ? 'selected' : ''; ?>>🟡 Pendiente</option>
+                      <option value="no_contesta" <?php echo (($r['estado_contacto'] ?? '') === 'no_contesta') ? 'selected' : ''; ?>>🟠
+                        No
+                        contesta</option>
+                    </select>
+                  </form>
                 </td>
 
                 <!-- Soporte -->
