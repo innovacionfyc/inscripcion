@@ -1,14 +1,11 @@
 <?php
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
 require_once dirname(__DIR__) . '/correo/enviar_correo.php';
 
-// -----------------------------
-// 1) Tomar slug
-// -----------------------------
 $slug = isset($_GET['e']) ? $_GET['e'] : '';
 if ($slug === '') {
   http_response_code(400);
@@ -16,9 +13,6 @@ if ($slug === '') {
   exit;
 }
 
-// -----------------------------
-// 2) Consultar evento (SIN get_result)
-// -----------------------------
 $evento = null;
 
 $stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre, lugar_personalizado, autoestudio FROM eventos WHERE slug = ? LIMIT 1');
@@ -48,12 +42,9 @@ if (!$evento) {
   exit;
 }
 
-// -----------------------------
-// 3) Fechas/horario del evento (con tipo)
-// -----------------------------
 $fechas_presenciales = array();
 $fechas_virtuales = array();
-$fechas_generales = array(); // por si quedan "general" en híbrida
+$fechas_generales = array();
 
 $stmtf = $conn->prepare("
     SELECT tipo, fecha, hora_inicio, hora_fin
@@ -81,38 +72,29 @@ while ($stmtf->fetch()) {
   } elseif ($tipo === 'virtual') {
     $fechas_virtuales[] = $row;
   } else {
-    // tipo = 'general' (o cualquier cosa rara) -> compatibilidad con eventos antiguos
     if ($mod === 'presencial') {
       $fechas_presenciales[] = $row;
     } elseif ($mod === 'virtual') {
       $fechas_virtuales[] = $row;
     } else {
-      // híbrida: si por alguna razón quedó "general", no la botamos
       $fechas_generales[] = $row;
     }
   }
 }
 $stmtf->close();
 
-// 2) Compatibilidad: tu código ya trabaja con $fechas (módulos/asistencia)
 $mod = strtolower(trim($evento['modalidad'] ?? ''));
 
 if ($mod === 'hibrida') {
-  // en híbrida: diplomado completo -> usamos TODAS las fechas (presencial + virtual)
   $fechas = array_merge($fechas_presenciales, $fechas_virtuales);
 
-  // ordenamos por fecha por seguridad
   usort($fechas, function ($a, $b) {
     return strcmp($a['fecha'], $b['fecha']);
   });
 } else {
-  // comportamiento que ya tenías
   $fechas = ($mod === 'virtual') ? $fechas_virtuales : $fechas_presenciales;
 }
 
-
-// 3) Fallback ultra seguro: si por algún motivo no hay tipo,
-// intentamos leer las "general" (para no dejar el evento sin fechas)
 if (empty($fechas_presenciales) && empty($fechas_virtuales)) {
   $stmtf2 = $conn->prepare("
       SELECT fecha, hora_inicio, hora_fin
@@ -133,7 +115,6 @@ if (empty($fechas_presenciales) && empty($fechas_virtuales)) {
   $modx = strtolower(trim($evento['modalidad'] ?? ''));
   if ($modx !== 'hibrida') {
 
-    // Virtual o Presencial (eventos antiguos): comportamiento clásico
     $fechas = array();
 
     $stmtf = $conn->prepare("
@@ -152,7 +133,6 @@ if (empty($fechas_presenciales) && empty($fechas_virtuales)) {
     }
     $stmtf->close();
 
-    // Fallback si no hay general
     if (empty($fechas)) {
       $stmtf2 = $conn->prepare("
         SELECT fecha, hora_inicio, hora_fin
@@ -170,7 +150,7 @@ if (empty($fechas_presenciales) && empty($fechas_virtuales)) {
       $stmtf2->close();
     }
 
-  } // ✅ si es híbrida NO hacemos nada aquí (porque ya tienes $fechas_virtuales y $fechas_presenciales)
+  }
 }
 
 function pintarFechasHtml($fechasArr)
@@ -228,7 +208,6 @@ function detalleHorarioHtml($fechasArr)
     $m = $meses[(int) date('n', strtotime($f['fecha'])) - 1];
     $y = date('Y', strtotime($f['fecha']));
 
-    // Forzar 12h con a. m./p. m. y negrita
     $hi = date('g:i a', strtotime($f['fecha'] . ' ' . $f['hora_inicio']));
     $hf = date('g:i a', strtotime($f['fecha'] . ' ' . $f['hora_fin']));
     $hi = str_replace(array('am', 'pm'), array('a. m.', 'p. m.'), strtolower($hi));
@@ -244,13 +223,11 @@ $modLowResumen = strtolower(trim($evento['modalidad'] ?? ''));
 
 if ($modLowResumen === 'hibrida') {
 
-  // Resúmenes separados (solo fechas, sin horas)
   $resP = !empty($fechas_presenciales) ? resumirFechas($fechas_presenciales) : 'Por definir';
   $resV = !empty($fechas_virtuales) ? resumirFechas($fechas_virtuales) : 'Por definir';
 
   $resumen_fechas = "Presencial: " . $resP . " | Virtual: " . $resV;
 
-  // Detalle horario separado (con horas)
   $detP = !empty($fechas_presenciales) ? detalleHorarioHtml($fechas_presenciales) : '<em>Por definir.</em>';
   $detV = !empty($fechas_virtuales) ? detalleHorarioHtml($fechas_virtuales) : '<em>Por definir.</em>';
 
@@ -260,7 +237,6 @@ if ($modLowResumen === 'hibrida') {
 
 } else {
 
-  // Comportamiento clásico (no tocar)
   $resumen_fechas = !empty($fechas) ? resumirFechas($fechas) : 'Por definir';
   $detalle_horario = !empty($fechas) ? detalleHorarioHtml($fechas) : '<em>Pronto te enviaremos el horario detallado.</em>';
 }
@@ -282,26 +258,16 @@ if (
 
 $mensaje_exito = false;
 
-// Lugar final para el correo (solo si es presencial)
 $lugar_final = '';
 $modLow = strtolower($evento['modalidad'] ?? '');
 if ($modLow === 'presencial') {
   if (!empty($evento['lugar_personalizado'])) {
-    // Permite saltos de línea escritos por el admin
     $lugar_final = nl2br($evento['lugar_personalizado']);
   } else {
-    // Lugar por defecto
     $lugar_final = "Centro de Convenciones Cafam Floresta<br>Av. Cra. 68 No. 90-88, Bogotá - Salón Sauces";
   }
 }
-// Si es virtual, $lugar_final queda vacío y el correo no mostrará bloque de lugar
 
-
-// =========================
-// Helpers de normalización (compatibles con PHP viejo)
-// =========================
-
-// Mayúsculas con tildes (para ENTIDAD)
 if (!function_exists('strtoupper_utf8')) {
   function strtoupper_utf8($texto)
   {
@@ -332,7 +298,6 @@ if (!function_exists('strtoupper_utf8')) {
   }
 }
 
-// Minúsculas con tildes (soporte Title Case)
 if (!function_exists('strtolower_utf8')) {
   function strtolower_utf8($t)
   {
@@ -359,7 +324,6 @@ if (!function_exists('strtolower_utf8')) {
   }
 }
 
-// Title Case simple (para NOMBRES y APELLIDOS)
 if (!function_exists('titlecase_es')) {
   function titlecase_es($texto)
   {
@@ -394,20 +358,15 @@ if (!function_exists('titlecase_es')) {
   }
 }
 
-// -----------------------------
-// 4) POST: guardar inscripción + correo
-// -----------------------------
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $evento_id = isset($_POST["evento_id"]) ? $_POST["evento_id"] : 0;
   $tipo_inscripcion = isset($_POST["tipo_inscripcion"]) ? $_POST["tipo_inscripcion"] : '';
 
-  // Nombres / Apellidos (Title Case)
   $nombres = isset($_POST['nombres']) ? $_POST['nombres'] : '';
   $apellidos = isset($_POST['apellidos']) ? $_POST['apellidos'] : '';
   $nombres = titlecase_es($nombres);
   $apellidos = titlecase_es($apellidos);
 
-  // Compatibilidad con código viejo que usa `nombre`
   $nombre_completo = trim($nombres . ' ' . $apellidos);
   $nombre = $nombre_completo;
 
@@ -419,7 +378,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $ciudad = isset($_POST["ciudad"]) ? $_POST["ciudad"] : '';
   $email_personal = isset($_POST["email_personal"]) ? $_POST["email_personal"] : '';
   $email_corporativo = isset($_POST["email_corporativo"]) ? $_POST["email_corporativo"] : '';
-  // Medio (select + opcional “otro”)
   $medio_opcion = isset($_POST["medio_opcion"]) ? trim($_POST["medio_opcion"]) : '';
   $medio_otro = isset($_POST["medio_otro"]) ? trim($_POST["medio_otro"]) : '';
 
@@ -437,13 +395,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $medio = $mapMedio[$medio_opcion];
     }
   } else {
-    // fallback por si llega algo raro
     $medio = '';
   }
 
-  // ===== Asistencia (solo virtual) =====
   $mod_form = strtolower(trim($evento['modalidad'] ?? ''));
-  $es_virtual = ($mod_form === 'virtual');   // ✅ ESTA LÍNEA ES LA CLAVE
+  $es_virtual = ($mod_form === 'virtual');
 
   $asistencia_tipo = 'COMPLETO';
   $modulos_csv = '';
@@ -480,37 +436,30 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $modulos_csv = '';
   }
 
-  // Consentimiento WhatsApp
   $whatsapp_consent = isset($_POST['whatsapp_consent']) ? (($_POST['whatsapp_consent'] === 'SI') ? 'SI' : 'NO') : null;
 
-  // Fecha/hora de registro (para DB antiguas que no ponen default)
   $fecha_registro = date('Y-m-d H:i:s');
 
-  // --- Soporte de pago (opcional) ---
-  $soporte_rel = ''; // guardaremos ruta relativa: "uploads/soportes/archivo.ext"
+  $soporte_rel = '';
   if (isset($_FILES['soporte_pago']) && is_array($_FILES['soporte_pago']) && $_FILES['soporte_pago']['error'] === 0) {
-    $maxBytes = 10 * 1024 * 1024; // 10 MB
+    $maxBytes = 10 * 1024 * 1024;
     $tmpName = $_FILES['soporte_pago']['tmp_name'];
     $origName = $_FILES['soporte_pago']['name'];
     $size = (int) $_FILES['soporte_pago']['size'];
 
     if ($size <= $maxBytes && is_uploaded_file($tmpName)) {
-      // Extensión permitida
       $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
       $permitidas = array('pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp');
       if (in_array($ext, $permitidas)) {
-        // Carpeta destino física
         $destDir = dirname(__DIR__) . '/uploads/soportes/';
         if (!is_dir($destDir)) {
           @mkdir($destDir, 0775, true);
         }
 
-        // Nombre seguro y único
         $nombreSeguro = 'soporte_' . date('Ymd_His') . '_' . mt_rand(1000, 9999) . '.' . $ext;
 
-        // Mover
         if (@move_uploaded_file($tmpName, $destDir . $nombreSeguro)) {
-          $soporte_rel = 'uploads/soportes/' . $nombreSeguro; // ruta que podrás linkear
+          $soporte_rel = 'uploads/soportes/' . $nombreSeguro;
         } else {
           error_log('[SOPORTE] No se pudo mover el archivo subido.');
         }
@@ -522,7 +471,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
   }
 
-  // INSERT manteniendo `nombre` + nuevos campos `nombres` y `apellidos`
   $stmt = $conn->prepare("INSERT INTO inscritos (
       evento_id, tipo_inscripcion, nombre, nombres, apellidos, cedula, cargo, entidad, celular, ciudad,
       email_personal, email_corporativo, medio, soporte_pago,
@@ -552,13 +500,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   );
 
   if ($stmt->execute()) {
-    // --- Armar datos del correo ---
     $es_presencial = (strtolower($evento['modalidad']) === 'presencial');
 
-    // PDF adjunto (solo presencial y solo si NO cambiaron el lugar por uno personalizado)
     $path_pdf = null;
     if ($es_presencial) {
-      // Si el admin NO escribió un lugar personalizado, usamos el lugar por defecto (Cafam) y adjuntamos la guía
       $usa_lugar_por_defecto = empty($evento['lugar_personalizado']);
 
       if ($usa_lugar_por_defecto) {
@@ -570,12 +515,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           error_log('PDF no encontrado (revisa nombre y carpeta): ' . $path_pdf_candidato);
         }
       } else {
-        // Lugar personalizado -> NO adjuntar guía hotelera
         $path_pdf = null;
       }
     }
 
-    // FIRMA: ruta de archivo en el servidor para embeber por CID
     $firma_file = '';
     if (!empty($evento['firma_imagen'])) {
       $tmp = dirname(__DIR__) . '/uploads/firmas/' . $evento['firma_imagen'];
@@ -586,23 +529,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       }
     }
 
-    // Imagen del evento (embebida) + URL pública opcional
     $img_file = dirname(__DIR__) . '/uploads/eventos/' . $evento['imagen'];
     $img_pub = base_url('uploads/eventos/' . $evento['imagen']);
 
-    // WhatsApp (solo números)
     $wa_num = '';
     if (!empty($evento['whatsapp_numero'])) {
       $wa_num = preg_replace('/\D/', '', $evento['whatsapp_numero']);
     }
 
-    // Firma (URL pública)
     $firma_url_public = '';
     if (!empty($evento['firma_imagen'])) {
       $firma_url_public = base_url('uploads/firmas/' . $evento['firma_imagen']);
     }
 
-    // Texto humano de módulos seleccionados
     $modulos_human = '';
     if ($asistencia_tipo === 'MODULOS' && !empty($modulos_csv)) {
       $mods = explode(',', $modulos_csv);
@@ -617,7 +556,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 
     $datosCorreo = array(
-      // Evento
       'evento_id' => (int) $evento['id'],
       'nombre_evento' => $evento['nombre'],
       'modalidad' => $evento['modalidad'],
@@ -625,50 +563,42 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       'fecha_limite' => $evento['fecha_limite'],
       'resumen_fechas' => $resumen_fechas,
       'detalle_horario' => $detalle_horario,
-      'url_imagen' => $img_file,            // para addEmbeddedImage
-      'url_imagen_public' => $img_pub,             // opcional
+      'url_imagen' => $img_file,
+      'url_imagen_public' => $img_pub,
       'adjunto_pdf' => $path_pdf,
-      'firma_file' => $firma_file,          // firma embebida por CID
+      'firma_file' => $firma_file,
       'encargado_nombre' => $evento['encargado_nombre'],
       'lugar' => $lugar_final,
 
-      // Encabezado “Señores:”
       'entidad_empresa' => $entidad,
       'nombre_inscrito' => $nombre,
 
-      // WhatsApp y firma
-      'whatsapp_numero' => $wa_num,              // solo dígitos
+      'whatsapp_numero' => $wa_num,
       'firma_url_public' => $firma_url_public,
 
-      // 🔹 NUEVOS CAMPOS
-      'asistencia_tipo' => $asistencia_tipo,     // 'COMPLETO' o 'MODULOS'
-      'modulos_texto' => $modulos_human,       // ej: "Día 1 (04/09/2025), Día 3 (06/09/2025)"
+      'asistencia_tipo' => $asistencia_tipo,
+      'modulos_texto' => $modulos_human,
       'modulos_fechas' => $modulos_csv,
-      'whatsapp_consent' => $whatsapp_consent     // 'SI' o 'NO'
+      'whatsapp_consent' => $whatsapp_consent
     );
 
-    // =========================
-    // DEBUG LOCAL: no enviar correos, guardar HTML
-    // =========================
-    $MAIL_DEBUG = false; // <-- ponlo en false cuando estés en servidor
+
+    $MAIL_DEBUG = false;
 
     $correo = new CorreoDenuncia();
 
     if ($MAIL_DEBUG) {
-      // Guardar un "preview" del correo en HTML para verlo en el navegador
       $debugDir = dirname(__DIR__) . '/storage/mail_debug/';
       if (!is_dir($debugDir)) {
         @mkdir($debugDir, 0775, true);
       }
 
-      // Intento 1: si tu clase tiene un método para generar HTML, úsalo (si no existe, cae al fallback)
       $html = '';
       if (method_exists($correo, 'buildConfirmacionInscripcionHtml')) {
         $html = $correo->buildConfirmacionInscripcionHtml($nombre, $email_corporativo, $datosCorreo);
       } elseif (method_exists($correo, 'renderConfirmacionInscripcion')) {
         $html = $correo->renderConfirmacionInscripcion($nombre, $email_corporativo, $datosCorreo);
       } else {
-        // Fallback: dejamos un dump bonito del payload para validar datos (mientras ajustamos la clase de correo)
         $html = '<h2>DEBUG CORREO - Confirmación inscripción</h2>'
           . '<pre style="white-space:pre-wrap;background:#111;color:#0f0;padding:16px;border-radius:12px">'
           . htmlspecialchars(print_r($datosCorreo, true), ENT_QUOTES, 'UTF-8')
@@ -678,7 +608,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $fname = 'confirmacion_evento_' . (int) $evento['id'] . '_' . date('Ymd_His') . '.html';
       file_put_contents($debugDir . $fname, $html);
 
-      // Mostrar link local
       echo '<div style="padding:16px;font-family:Arial">';
       echo '<h3>✅ Correo NO enviado (modo debug local)</h3>';
       echo '<p>Se generó el preview aquí:</p>';
@@ -687,11 +616,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       echo '</div>';
       exit;
     } else {
-      // Producción: envío real
       $correo->sendConfirmacionInscripcion($nombre, $email_corporativo, $datosCorreo);
     }
 
-    // === Aviso al comercial asignado al evento ===
     $com_email = '';
     $com_nombre = '';
     $eid = (int) $evento['id'];
@@ -882,7 +809,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $dia = $i + 1;
                     $f = $fechas[$i]['fecha'];
                     $rotulo = 'Día ' . $dia . ' — ' . date('d/m/Y', strtotime($f));
-                    // Valor guardado: la fecha YYYY-mm-dd (más estable que “Día 1”)
                     ?>
                     <label class="inline-flex items-center gap-2 p-2 border border-gray-200 rounded-lg">
                       <input type="checkbox" name="modulos[]" value="<?php echo htmlspecialchars($f, ENT_QUOTES, 'UTF-8'); ?>"
@@ -898,7 +824,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <input type="file" name="soporte_pago" accept=".pdf,image/*"
             class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
           <p class="text-sm text-black-500 -mt-2">Soporte de Asistencia Opcional (PDF o imagen - máx. 10 MB).</p>
-          <!-- Consentimiento WhatsApp -->
           <div class="p-4 border border-gray-300 rounded-xl">
             <div class="font-semibold text-gray-800 mb-2">
               Acepto la vinculación del número celular aquí registrado al grupo de WhatsApp que tendrá como única
@@ -914,8 +839,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               <input type="radio" name="whatsapp_consent" value="NO" class="accent-[#942934]" required> NO
             </label>
           </div>
-          <!--           <input type="text" name="medio" placeholder="¿Por qué medio se enteró?"
-            class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" /> -->
           <div class="p-4 border border-gray-200 rounded-xl">
             <label for="medio_opcion" class="font-semibold text-gray-800 mb-2 block">¿Por qué medio se enteró?</label>
 
@@ -928,7 +851,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               <option value="OTRO">Otro</option>
             </select>
 
-            <!-- Se muestra solo si el usuario elige “Otro” -->
             <input id="medio_otro" name="medio_otro" type="text" placeholder="¿Cuál medio?"
               class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500 mt-3 hidden" />
           </div>
@@ -938,7 +860,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             Enviar inscripción
           </button>
         </form>
-        <!-- LOADER OVERLAY con GIF -->
         <div id="loaderOverlay"
           style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:9999;">
           <div
@@ -955,213 +876,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     </div>
   </div>
 
-  <script src="../assets/js/jquery.min.js"></script>
   <script>
-    function validarFormulario() {
-      var correoEl = document.querySelector('input[name="email_corporativo"]');
-      var correo = (correoEl ? correoEl.value : '').trim();
-      var cedula = document.querySelector('input[name="cedula"]').value.trim();
-      var celular = document.querySelector('input[name="celular"]').value.trim();
-
-      if (!/^\d+$/.test(cedula)) {
-        alert("La cédula debe contener solo números.");
-        return false;
-      }
-      if (!/^\d{7,15}$/.test(celular)) {
-        alert("El celular debe contener entre 7 y 15 dígitos.");
-        return false;
-      }
-      if (!/^\S+@\S+\.\S+$/.test(correo)) {
-        alert("Correo corporativo inválido.");
-        return false;
-      }
-      return true;
-    }
-
-    // Bloquea doble envío, muestra overlay y usa el GIF también dentro del botón
-    function preEnviar(evt) {
-      // 1) Validación existente
-      if (typeof validarFormulario === 'function') {
-        if (!validarFormulario()) {
-          if (evt && evt.preventDefault) evt.preventDefault();
-          return false;
-        }
-      }
-
-      // 2) Deshabilitar botón + mostrar GIF en el botón
-      var btn = document.querySelector('button[type="submit"]');
-      if (btn) {
-        btn.disabled = true;
-        btn.className += ' opacity-70 cursor-not-allowed';
-        btn.innerHTML = '<img src="../assets/img/loader-buho.gif" alt="" style="height:20px;width:auto;vertical-align:middle;margin-right:8px;"> Enviando…';
-      }
-
-      // 3) Mostrar overlay con el búho
-      var overlay = document.getElementById('loaderOverlay');
-      if (overlay) overlay.style.display = 'flex';
-
-      return true; // continuar con el submit
-    }
-
-    // ========== ENTIDAD → MAYÚSCULAS (sin arrow functions) ==========
-    (function () {
-      var entidad = document.getElementById('entidad');
-      if (!entidad) return;
-      entidad.addEventListener('input', function () {
-        var start = this.selectionStart, end = this.selectionEnd;
-        var v = this.value || '';
-        this.value = v.toUpperCase();
-        if (typeof start === 'number' && typeof end === 'number') {
-          this.setSelectionRange(start, end);
-        }
-      });
-    })();
-
-    // ========== NOMBRES / APELLIDOS → Título (sin arrow ni \p{L}) ==========
-    (function () {
-      function toTitleCase(str) {
-        str = (str || '').toLowerCase();
-        var parts = str.split(/(\s+|-)/);
-        for (var i = 0; i < parts.length; i++) {
-          var s = parts[i];
-          if (s && !/^\s+$/.test(s) && s !== '-') {
-            parts[i] = s.charAt(0).toUpperCase() + s.slice(1);
-          }
-        }
-        return parts.join('');
-      }
-      function bindTitleCase(id) {
-        var el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('input', function () {
-          var pos = this.selectionStart;
-          var val = this.value || '';
-          var nuevo = toTitleCase(val);
-          if (nuevo !== val) {
-            this.value = nuevo;
-            if (typeof pos === 'number') this.setSelectionRange(pos, pos);
-          }
-        });
-      }
-      bindTitleCase('nombres');
-      bindTitleCase('apellidos');
-    })();
-
-    (function () {
-      var radios = document.getElementsByName('asistencia_tipo');
-      var wrap = document.getElementById('wrap_modulos');
-
-      // ✅ ajuste: si NO existe la sección (no es virtual), salimos
-      if (!wrap || !radios || radios.length === 0) return;
-
-      function toggleModulos() {
-        var tipo = 'COMPLETO';
-        for (var i = 0; i < radios.length; i++) { if (radios[i].checked) tipo = radios[i].value; }
-        wrap.className = (tipo === 'MODULOS')
-          ? wrap.className.replace(' hidden', '')
-          : (wrap.className.indexOf('hidden') >= 0 ? wrap.className : wrap.className + ' hidden');
-      }
-
-      for (var i = 0; i < radios.length; i++) {
-        radios[i].addEventListener('change', toggleModulos);
-      }
-      toggleModulos();
-
-      var form = document.querySelector('form[method="POST"]');
-      if (form) {
-        var _oldPreEnviar = window.preEnviar;
-        window.preEnviar = function (evt) {
-          if (typeof _oldPreEnviar === 'function') {
-            if (_oldPreEnviar(evt) === false) return false;
-          }
-
-          var tipo = 'COMPLETO';
-          for (var i = 0; i < radios.length; i++) { if (radios[i].checked) tipo = radios[i].value; }
-
-          if (tipo === 'MODULOS') {
-            var checks = wrap.querySelectorAll('input[type="checkbox"]:checked');
-            if (!checks || checks.length === 0) {
-              alert('Por favor selecciona al menos un día.');
-              if (evt && evt.preventDefault) evt.preventDefault();
-              return false;
-            }
-          }
-          return true;
-        };
-      }
-    })();
-
-    // Cerrar modal y enviar a inicio
-    function cerrarModalGracias() {
-      var modal = document.getElementById('modalGracias');
-      if (modal) modal.classList.add('hidden');
-      window.location.href = "https://fycconsultores.com/inicio";
-    }
-
-    // Slug actual desde PHP o, si no viene, desde la URL
-    var SLUG_ACTUAL = "<?php echo isset($slug) ? addslashes($slug) : ''; ?>";
-    if (!SLUG_ACTUAL) {
-      var m = location.search.match(/[?&]e=([^&]+)/);
-      if (m) { try { SLUG_ACTUAL = decodeURIComponent(m[1].replace(/\+/g, ' ')); } catch (e) { } }
-    }
-
-    // Volver a abrir el formulario limpio del mismo evento
-    function otraInscripcion() {
-      window.location.href = "registro.php?e=" + encodeURIComponent(SLUG_ACTUAL);
-    }
-    // Funcion para que se ajuste en WP
-    (function () {
-      // Solo funciona cuando la página está dentro de un iframe
-      if (window.top === window.self) return;
-
-      function alturaDoc() {
-        const b = document.body, e = document.documentElement;
-        return Math.max(
-          b.scrollHeight, b.offsetHeight, e.clientHeight, e.scrollHeight, e.offsetHeight
-        );
-      }
-
-      function enviarAltura() {
-        // Por simplicidad dejamos '*'; luego lo endurecemos si quieres.
-        parent.postMessage({ type: 'registro:resize', height: alturaDoc() }, '*');
-      }
-
-      // En carga inicial (varias veces por si cambian fuentes/imágenes)
-      window.addEventListener('load', function () {
-        enviarAltura();
-        setTimeout(enviarAltura, 300);
-        setTimeout(enviarAltura, 1200);
-      });
-
-      // Si cambia el tamaño de la ventana del dispositivo
-      window.addEventListener('resize', enviarAltura);
-
-      // Si el DOM cambia (validaciones, pasos del formulario, mensajes, etc.)
-      new MutationObserver(enviarAltura).observe(document.body, { childList: true, subtree: true, attributes: true });
-
-      // Refuerzo cada cierto tiempo por si hay cambios asíncronos
-      setInterval(enviarAltura, 1000);
-    })();
-
-    (function () {
-      var sel = document.getElementById('medio_opcion');
-      var otro = document.getElementById('medio_otro');
-      if (!sel || !otro) return;
-
-      function toggleOtro() {
-        if (sel.value === 'OTRO') {
-          otro.classList.remove('hidden');
-          otro.required = true;
-        } else {
-          otro.classList.add('hidden');
-          otro.required = false;
-          otro.value = '';
-        }
-      }
-      sel.addEventListener('change', toggleOtro);
-      toggleOtro();
-    })();
+    window.__SLUG_ACTUAL = "<?php echo isset($slug) ? addslashes($slug) : ''; ?>";
   </script>
+  <script src="assets/js/registro.js?v=1"></script>
 </body>
 
 </html>
