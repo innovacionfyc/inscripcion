@@ -250,10 +250,10 @@ class CorreoDenuncia
         $line1 = '';
         if ($modalidadLow === 'curso_especial') {
             $map = [
-                'CONGRESO' => 'Caso 1: Congreso (Presencial)',
-                'CURSO_COMPLETO' => 'Caso 2: Curso completo (Presencial + todos los módulos virtuales)',
-                'MODULOS_VIRTUALES' => 'Caso 3: Módulos virtuales (sin presencial)',
-                'CONGRESO_MAS_MODULOS' => 'Caso 4: Congreso (Presencial) + módulos virtuales',
+                'CONGRESO' => 'Opción 1: Congreso (Presencial)',
+                'CURSO_COMPLETO' => 'Opción 2: Curso completo (Presencial + todos los módulos virtuales)',
+                'MODULOS_VIRTUALES' => 'Opción 3: Módulos virtuales (sin presencial)',
+                'CONGRESO_MAS_MODULOS' => 'Opción 4: Congreso (Presencial) + módulos virtuales',
             ];
             $line1 = $map[$asistencia_tipo] ?? ('Selección: ' . $this->h($asistencia_tipo));
         } else {
@@ -805,10 +805,10 @@ class CorreoDenuncia
             $incluyeV = (strtoupper((string) ($data['incluye_virtual'] ?? 'NO')) === 'SI');
 
             $mapCE = [
-                'CONGRESO' => 'Caso 1: Congreso (Presencial)',
-                'CURSO_COMPLETO' => 'Caso 2: Curso completo (Presencial + todos los módulos virtuales)',
-                'MODULOS_VIRTUALES' => 'Caso 3: Módulos virtuales (sin presencial)',
-                'CONGRESO_MAS_MODULOS' => 'Caso 4: Congreso (Presencial) + módulos virtuales',
+                'CONGRESO' => 'Opción 1: Congreso (Presencial)',
+                'CURSO_COMPLETO' => 'Opción 2: Curso completo (Presencial + todos los módulos virtuales)',
+                'MODULOS_VIRTUALES' => 'Opción 3: Módulos virtuales (sin presencial)',
+                'CONGRESO_MAS_MODULOS' => 'Opción 4: Congreso (Presencial) + módulos virtuales',
             ];
             $selNice = isset($mapCE[$asist]) ? $mapCE[$asist] : ($asist ?: 'COMPLETO');
 
