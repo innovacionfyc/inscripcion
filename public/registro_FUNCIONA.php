@@ -1,6 +1,6 @@
 <?php
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
 
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
@@ -11,13 +11,6 @@ if ($slug === '') {
   http_response_code(400);
   echo 'Falta el parámetro "e" (slug del evento).';
   exit;
-}
-
-function norm_modalidad($m)
-{
-  $m = strtolower(trim((string) $m));
-  $m = str_replace(array(' ', '-'), '_', $m);
-  return $m;
 }
 
 $evento = null;
@@ -42,15 +35,13 @@ if ($stmt->fetch()) {
 }
 $stmt->close();
 
+
 if (!$evento) {
   http_response_code(404);
   echo 'Evento no encontrado para el slug: ' . htmlspecialchars($slug, ENT_QUOTES, 'UTF-8');
   exit;
 }
 
-$mod = norm_modalidad($evento['modalidad'] ?? '');
-
-// Fechas/horario del evento (con tipo)
 $fechas_presenciales = array();
 $fechas_virtuales = array();
 $fechas_generales = array();
@@ -74,54 +65,92 @@ while ($stmtf->fetch()) {
   );
 
   $tipo = strtolower(trim($f_tipo));
+  $mod = strtolower(trim($evento['modalidad'] ?? ''));
+
   if ($tipo === 'presencial') {
     $fechas_presenciales[] = $row;
   } elseif ($tipo === 'virtual') {
     $fechas_virtuales[] = $row;
   } else {
-    $fechas_generales[] = $row;
+    if ($mod === 'presencial') {
+      $fechas_presenciales[] = $row;
+    } elseif ($mod === 'virtual') {
+      $fechas_virtuales[] = $row;
+    } else {
+      $fechas_generales[] = $row;
+    }
   }
 }
 $stmtf->close();
 
-// Curso Especial: módulos virtuales con nombre
-$modulos_virtuales = array();
-if ($mod === 'curso_especial') {
-  $stmtm = $conn->prepare("
-      SELECT id, orden, fecha, hora_inicio, hora_fin, nombre
-      FROM eventos_modulos_virtuales
-      WHERE evento_id = ? AND activo = 1
-      ORDER BY orden ASC, fecha ASC
-    ");
-  $stmtm->bind_param("i", $evento['id']);
-  $stmtm->execute();
-  $stmtm->bind_result($mid, $mord, $mfecha, $mhi, $mhf, $mnom);
-  while ($stmtm->fetch()) {
-    $modulos_virtuales[] = array(
-      'id' => (int) $mid,
-      'orden' => (int) $mord,
-      'fecha' => $mfecha,
-      'hora_inicio' => $mhi,
-      'hora_fin' => $mhf,
-      'nombre' => $mnom
-    );
-  }
-  $stmtm->close();
-}
+$mod = strtolower(trim($evento['modalidad'] ?? ''));
 
-// Compatibilidad: $fechas para módulos virtuales clásicos (solo modalidad virtual)
 if ($mod === 'hibrida') {
   $fechas = array_merge($fechas_presenciales, $fechas_virtuales);
+
   usort($fechas, function ($a, $b) {
-    return strcmp($a['fecha'], $b['fecha']); });
-} elseif ($mod === 'virtual') {
-  $fechas = $fechas_virtuales;
-} elseif ($mod === 'presencial') {
-  $fechas = $fechas_presenciales;
-} elseif ($mod === 'curso_especial') {
-  $fechas = $fechas_presenciales;
+    return strcmp($a['fecha'], $b['fecha']);
+  });
 } else {
-  $fechas = $fechas_generales;
+  $fechas = ($mod === 'virtual') ? $fechas_virtuales : $fechas_presenciales;
+}
+
+if (empty($fechas_presenciales) && empty($fechas_virtuales)) {
+  $stmtf2 = $conn->prepare("
+      SELECT fecha, hora_inicio, hora_fin
+      FROM eventos_fechas
+      WHERE evento_id = ?
+    ORDER BY tipo ASC, fecha ASC
+    ");
+  $stmtf2->bind_param("i", $evento['id']);
+  $stmtf2->execute();
+  $stmtf2->bind_result($f_fecha2, $f_hi2, $f_hf2);
+  while ($stmtf2->fetch()) {
+    $fechas[] = array('fecha' => $f_fecha2, 'hora_inicio' => $f_hi2, 'hora_fin' => $f_hf2);
+  }
+  $stmtf2->close();
+
+} else {
+
+  $modx = strtolower(trim($evento['modalidad'] ?? ''));
+  if ($modx !== 'hibrida') {
+
+    $fechas = array();
+
+    $stmtf = $conn->prepare("
+      SELECT fecha, hora_inicio, hora_fin
+      FROM eventos_fechas
+      WHERE evento_id = ?
+        AND tipo = 'general'
+      ORDER BY fecha ASC
+    ");
+    $stmtf->bind_param("i", $evento['id']);
+    $stmtf->execute();
+    $stmtf->bind_result($f_fecha, $f_hi, $f_hf);
+
+    while ($stmtf->fetch()) {
+      $fechas[] = array('fecha' => $f_fecha, 'hora_inicio' => $f_hi, 'hora_fin' => $f_hf);
+    }
+    $stmtf->close();
+
+    if (empty($fechas)) {
+      $stmtf2 = $conn->prepare("
+        SELECT fecha, hora_inicio, hora_fin
+        FROM eventos_fechas
+        WHERE evento_id = ?
+        ORDER BY fecha ASC
+      ");
+      $stmtf2->bind_param("i", $evento['id']);
+      $stmtf2->execute();
+      $stmtf2->bind_result($f_fecha2, $f_hi2, $f_hf2);
+
+      while ($stmtf2->fetch()) {
+        $fechas[] = array('fecha' => $f_fecha2, 'hora_inicio' => $f_hi2, 'hora_fin' => $f_hf2);
+      }
+      $stmtf2->close();
+    }
+
+  }
 }
 
 function pintarFechasHtml($fechasArr)
@@ -190,20 +219,55 @@ function detalleHorarioHtml($fechasArr)
   return $html;
 }
 
-$resumen_fechas = !empty($fechas) ? resumirFechas($fechas) : 'Por definir';
-$detalle_horario = !empty($fechas) ? detalleHorarioHtml($fechas) : '<em>Pronto te enviaremos el horario detallado.</em>';
+$modLowResumen = strtolower(trim($evento['modalidad'] ?? ''));
+
+if ($modLowResumen === 'hibrida') {
+
+  $resP = !empty($fechas_presenciales) ? resumirFechas($fechas_presenciales) : 'Por definir';
+  $resV = !empty($fechas_virtuales) ? resumirFechas($fechas_virtuales) : 'Por definir';
+
+  $resumen_fechas = "Presencial: " . $resP . " | Virtual: " . $resV;
+
+  $detP = !empty($fechas_presenciales) ? detalleHorarioHtml($fechas_presenciales) : '<em>Por definir.</em>';
+  $detV = !empty($fechas_virtuales) ? detalleHorarioHtml($fechas_virtuales) : '<em>Por definir.</em>';
+
+  $detalle_horario = ""
+    . "<div style='margin-bottom:10px;'><strong>Presencial</strong>" . $detP . "</div>"
+    . "<div><strong>Virtual</strong>" . $detV . "</div>";
+
+} else {
+
+  $resumen_fechas = !empty($fechas) ? resumirFechas($fechas) : 'Por definir';
+  $detalle_horario = !empty($fechas) ? detalleHorarioHtml($fechas) : '<em>Pronto te enviaremos el horario detallado.</em>';
+}
+if (
+  isset($_GET['debug']) &&
+  $_GET['debug'] === 'fechas' &&
+  $_SERVER['HTTP_HOST'] === 'localhost'
+) {
+  echo '<pre style="background:#111;color:#0f0;padding:16px;border-radius:8px">';
+  echo "MODALIDAD:\n";
+  var_dump($evento['modalidad']);
+  echo "\n\nRESUMEN_FECHAS:\n";
+  var_dump($resumen_fechas);
+  echo "\n\nDETALLE_HORARIO (HTML):\n";
+  echo $detalle_horario;
+  echo '</pre>';
+  exit;
+}
 
 $mensaje_exito = false;
 
-// Lugar final para correo (solo si aplica presencial)
 $lugar_final = '';
-if (!empty($evento['lugar_personalizado'])) {
-  $lugar_final = nl2br($evento['lugar_personalizado']);
-} else {
-  $lugar_final = "Centro de Convenciones Cafam Floresta<br>Av. Cra. 68 No. 90-88, Bogotá - Salón Sauces";
+$modLow = strtolower($evento['modalidad'] ?? '');
+if ($modLow === 'presencial') {
+  if (!empty($evento['lugar_personalizado'])) {
+    $lugar_final = nl2br($evento['lugar_personalizado']);
+  } else {
+    $lugar_final = "Centro de Convenciones Cafam Floresta<br>Av. Cra. 68 No. 90-88, Bogotá - Salón Sauces";
+  }
 }
 
-// Helpers de normalización
 if (!function_exists('strtoupper_utf8')) {
   function strtoupper_utf8($texto)
   {
@@ -233,6 +297,7 @@ if (!function_exists('strtoupper_utf8')) {
     return $upper;
   }
 }
+
 if (!function_exists('strtolower_utf8')) {
   function strtolower_utf8($t)
   {
@@ -258,6 +323,7 @@ if (!function_exists('strtolower_utf8')) {
     return strtolower(strtr($t, $map));
   }
 }
+
 if (!function_exists('titlecase_es')) {
   function titlecase_es($texto)
   {
@@ -292,36 +358,8 @@ if (!function_exists('titlecase_es')) {
   }
 }
 
-function pintarModulosVirtualesHtml($mods)
-{
-  if (empty($mods))
-    return '<div class="text-gray-500 text-sm">—</div>';
-  $meses = array('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre');
-  $out = "<div class='space-y-2'>";
-  for ($i = 0; $i < count($mods); $i++) {
-    $m = $mods[$i];
-    $d = (int) date('j', strtotime($m['fecha']));
-    $mm = $meses[(int) date('n', strtotime($m['fecha'])) - 1];
-    $y = date('Y', strtotime($m['fecha']));
-
-    $hi = $m['hora_inicio'] ? date('g:i a', strtotime($m['fecha'] . ' ' . $m['hora_inicio'])) : '';
-    $hf = $m['hora_fin'] ? date('g:i a', strtotime($m['fecha'] . ' ' . $m['hora_fin'])) : '';
-    $hi = $hi ? str_replace(array('am', 'pm'), array('a. m.', 'p. m.'), strtolower($hi)) : '';
-    $hf = $hf ? str_replace(array('am', 'pm'), array('a. m.', 'p. m.'), strtolower($hf)) : '';
-
-    $hor = ($hi && $hf) ? (" — <span class='font-semibold'>$hi</span> a <span class='font-semibold'>$hf</span>") : '';
-    $out .= "<div class='p-3 border border-gray-200 rounded-xl bg-white'>"
-      . "<div class='font-semibold text-gray-800'>" . htmlspecialchars($m['nombre'], ENT_QUOTES, 'UTF-8') . "</div>"
-      . "<div class='text-sm text-gray-700 mt-1'>Fecha: $d de $mm de $y$hor</div>"
-      . "</div>";
-  }
-  $out .= "</div>";
-  return $out;
-}
-
-// POST: guardar inscripción + correo
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-  $evento_id = isset($_POST["evento_id"]) ? (int) $_POST["evento_id"] : 0;
+  $evento_id = isset($_POST["evento_id"]) ? $_POST["evento_id"] : 0;
   $tipo_inscripcion = isset($_POST["tipo_inscripcion"]) ? $_POST["tipo_inscripcion"] : '';
 
   $nombres = isset($_POST['nombres']) ? $_POST['nombres'] : '';
@@ -340,7 +378,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $ciudad = isset($_POST["ciudad"]) ? $_POST["ciudad"] : '';
   $email_personal = isset($_POST["email_personal"]) ? $_POST["email_personal"] : '';
   $email_corporativo = isset($_POST["email_corporativo"]) ? $_POST["email_corporativo"] : '';
-
   $medio_opcion = isset($_POST["medio_opcion"]) ? trim($_POST["medio_opcion"]) : '';
   $medio_otro = isset($_POST["medio_otro"]) ? trim($_POST["medio_otro"]) : '';
 
@@ -361,55 +398,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $medio = '';
   }
 
-  $mod_form = norm_modalidad($evento['modalidad'] ?? '');
+  $mod_form = strtolower(trim($evento['modalidad'] ?? ''));
+  $es_virtual = ($mod_form === 'virtual');
 
   $asistencia_tipo = 'COMPLETO';
   $modulos_csv = '';
 
-  // Curso Especial: 4 casos
-  if ($mod_form === 'curso_especial') {
-    $sel = isset($_POST['curso_especial_opcion']) ? strtoupper(trim($_POST['curso_especial_opcion'])) : 'CONGRESO';
-    $permitidas = array('CONGRESO', 'CURSO_COMPLETO', 'MODULOS_VIRTUALES', 'CONGRESO_MAS_MODULOS');
-    if (!in_array($sel, $permitidas, true))
-      $sel = 'CONGRESO';
 
-    $asistencia_tipo = $sel;
-
-    // Selección de módulos (por ID)
-    $mods_sel = isset($_POST['modulos_virtuales']) && is_array($_POST['modulos_virtuales']) ? $_POST['modulos_virtuales'] : array();
-    $ids_validos = array();
-    $mapMods = array();
-    for ($i = 0; $i < count($modulos_virtuales); $i++) {
-      $mapMods[(int) $modulos_virtuales[$i]['id']] = true;
-    }
-    for ($i = 0; $i < count($mods_sel); $i++) {
-      $id = (int) $mods_sel[$i];
-      if ($id > 0 && isset($mapMods[$id]))
-        $ids_validos[] = $id;
-    }
-    $ids_validos = array_values(array_unique($ids_validos));
-
-    if ($sel === 'CURSO_COMPLETO') {
-      $modulos_csv = 'ALL';
-    } elseif ($sel === 'CONGRESO') {
-      $modulos_csv = '';
-    } else {
-      if (empty($ids_validos)) {
-        // Si no seleccionó módulos cuando era obligatorio, lo degradamos a CONGRESO (seguro)
-        if ($sel === 'MODULOS_VIRTUALES') {
-          $asistencia_tipo = 'CONGRESO';
-          $modulos_csv = '';
-        } else {
-          $asistencia_tipo = 'CONGRESO';
-          $modulos_csv = '';
-        }
-      } else {
-        $modulos_csv = implode(',', $ids_validos);
-      }
-    }
-  }
-  // Virtual clásico: COMEPLETO vs MODULOS por fechas (lo que ya tenías)
-  else if ($mod_form === 'virtual') {
+  if ($es_virtual) {
     $asistencia_tipo = isset($_POST['asistencia_tipo']) ? strtoupper(trim($_POST['asistencia_tipo'])) : 'COMPLETO';
     if ($asistencia_tipo !== 'COMPLETO') {
       $asistencia_tipo = 'MODULOS';
@@ -441,6 +437,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   }
 
   $whatsapp_consent = isset($_POST['whatsapp_consent']) ? (($_POST['whatsapp_consent'] === 'SI') ? 'SI' : 'NO') : null;
+
   $fecha_registro = date('Y-m-d H:i:s');
 
   $soporte_rel = '';
@@ -458,7 +455,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         if (!is_dir($destDir)) {
           @mkdir($destDir, 0775, true);
         }
+
         $nombreSeguro = 'soporte_' . date('Ymd_His') . '_' . mt_rand(1000, 9999) . '.' . $ext;
+
         if (@move_uploaded_file($tmpName, $destDir . $nombreSeguro)) {
           $soporte_rel = 'uploads/soportes/' . $nombreSeguro;
         } else {
@@ -501,33 +500,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   );
 
   if ($stmt->execute()) {
+    $es_presencial = (strtolower($evento['modalidad']) === 'presencial');
 
-    // Para correos: determinar si incluye presencial y/o virtual
-    $incluye_presencial = false;
-    $incluye_virtual = false;
-
-    if ($mod_form === 'curso_especial') {
-      if ($asistencia_tipo === 'CONGRESO' || $asistencia_tipo === 'CURSO_COMPLETO' || $asistencia_tipo === 'CONGRESO_MAS_MODULOS')
-        $incluye_presencial = true;
-      if ($asistencia_tipo === 'CURSO_COMPLETO')
-        $incluye_virtual = true;
-      if ($asistencia_tipo === 'MODULOS_VIRTUALES' || $asistencia_tipo === 'CONGRESO_MAS_MODULOS')
-        $incluye_virtual = true;
-    } else {
-      $incluye_presencial = ($mod_form === 'presencial' || $mod_form === 'hibrida');
-      $incluye_virtual = ($mod_form === 'virtual' || $mod_form === 'hibrida');
-    }
-
-    // PDF guía hotelera (solo cuando realmente aplica presencial por defecto)
     $path_pdf = null;
-    if ($incluye_presencial) {
+    if ($es_presencial) {
       $usa_lugar_por_defecto = empty($evento['lugar_personalizado']);
+
       if ($usa_lugar_por_defecto) {
         $pdf_nombre = 'GUIA HOTELERA 2025 - Cafam.pdf';
         $path_pdf_candidato = dirname(__DIR__) . '/docs/' . $pdf_nombre;
         if (is_file($path_pdf_candidato)) {
           $path_pdf = $path_pdf_candidato;
+        } else {
+          error_log('PDF no encontrado (revisa nombre y carpeta): ' . $path_pdf_candidato);
         }
+      } else {
+        $path_pdf = null;
       }
     }
 
@@ -536,6 +524,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $tmp = dirname(__DIR__) . '/uploads/firmas/' . $evento['firma_imagen'];
       if (file_exists($tmp)) {
         $firma_file = $tmp;
+      } else {
+        error_log('Firma no encontrada en disco: ' . $tmp);
       }
     }
 
@@ -552,45 +542,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $firma_url_public = base_url('uploads/firmas/' . $evento['firma_imagen']);
     }
 
-    // Texto humano de módulos para Curso Especial
     $modulos_human = '';
-    if ($mod_form === 'curso_especial') {
-      if ($asistencia_tipo === 'CURSO_COMPLETO') {
-        $parts = array();
-        for ($i = 0; $i < count($modulos_virtuales); $i++) {
-          $m = $modulos_virtuales[$i];
-          $parts[] = $m['nombre'] . ' (' . date('d/m/Y', strtotime($m['fecha'])) . ')';
+    if ($asistencia_tipo === 'MODULOS' && !empty($modulos_csv)) {
+      $mods = explode(',', $modulos_csv);
+      $bloques = array();
+      for ($i = 0; $i < count($fechas); $i++) {
+        $f = $fechas[$i]['fecha'];
+        if (in_array($f, $mods, true)) {
+          $bloques[] = 'Día ' . ($i + 1) . ' (' . date('d/m/Y', strtotime($f)) . ')';
         }
-        $modulos_human = !empty($parts) ? implode(', ', $parts) : '';
-      } elseif (!empty($modulos_csv) && $modulos_csv !== 'ALL') {
-        $ids = explode(',', $modulos_csv);
-        $map = array();
-        for ($i = 0; $i < count($modulos_virtuales); $i++) {
-          $map[(int) $modulos_virtuales[$i]['id']] = $modulos_virtuales[$i];
-        }
-        $parts = array();
-        for ($i = 0; $i < count($ids); $i++) {
-          $id = (int) $ids[$i];
-          if (isset($map[$id])) {
-            $m = $map[$id];
-            $parts[] = $m['nombre'] . ' (' . date('d/m/Y', strtotime($m['fecha'])) . ')';
-          }
-        }
-        $modulos_human = !empty($parts) ? implode(', ', $parts) : '';
       }
-    } else {
-      // Virtual clásico
-      if ($asistencia_tipo === 'MODULOS' && !empty($modulos_csv)) {
-        $mods = explode(',', $modulos_csv);
-        $bloques = array();
-        for ($i = 0; $i < count($fechas); $i++) {
-          $f = $fechas[$i]['fecha'];
-          if (in_array($f, $mods, true)) {
-            $bloques[] = 'Día ' . ($i + 1) . ' (' . date('d/m/Y', strtotime($f)) . ')';
-          }
-        }
-        $modulos_human = implode(', ', $bloques);
-      }
+      $modulos_human = implode(', ', $bloques);
     }
 
     $datosCorreo = array(
@@ -606,25 +568,25 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       'adjunto_pdf' => $path_pdf,
       'firma_file' => $firma_file,
       'encargado_nombre' => $evento['encargado_nombre'],
-      'lugar' => ($incluye_presencial ? $lugar_final : ''),
+      'lugar' => $lugar_final,
+
       'entidad_empresa' => $entidad,
       'nombre_inscrito' => $nombre,
+
       'whatsapp_numero' => $wa_num,
       'firma_url_public' => $firma_url_public,
 
       'asistencia_tipo' => $asistencia_tipo,
       'modulos_texto' => $modulos_human,
       'modulos_fechas' => $modulos_csv,
-      'whatsapp_consent' => $whatsapp_consent,
-
-      // flags para que en el siguiente paso el correo sea 100% preciso
-      'incluye_presencial' => $incluye_presencial ? 'SI' : 'NO',
-      'incluye_virtual' => $incluye_virtual ? 'SI' : 'NO'
+      'whatsapp_consent' => $whatsapp_consent
     );
+
 
     $MAIL_DEBUG = false;
 
     $correo = new CorreoDenuncia();
+
     if ($MAIL_DEBUG) {
       $debugDir = dirname(__DIR__) . '/storage/mail_debug/';
       if (!is_dir($debugDir)) {
@@ -648,14 +610,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       echo '<div style="padding:16px;font-family:Arial">';
       echo '<h3>✅ Correo NO enviado (modo debug local)</h3>';
+      echo '<p>Se generó el preview aquí:</p>';
       echo '<p><code>' . htmlspecialchars($debugDir . $fname, ENT_QUOTES, 'UTF-8') . '</code></p>';
+      echo '<p>Ábrelo desde el explorador de archivos (doble click) o compártemelo y lo afinamos.</p>';
       echo '</div>';
       exit;
     } else {
       $correo->sendConfirmacionInscripcion($nombre, $email_corporativo, $datosCorreo);
     }
 
-    // Aviso al comercial
     $com_email = '';
     $com_nombre = '';
     $eid = (int) $evento['id'];
@@ -692,16 +655,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         'email_personal' => $email_personal,
         'email_corporativo' => $email_corporativo,
         'medio' => $medio,
-        'soporte_pago' => $soporte_rel,
-
-        // nuevo: selección exacta (para correo comercial, siguiente paso lo mostramos bonito)
-        'asistencia_tipo' => $asistencia_tipo,
-        'modulos_seleccionados' => $modulos_csv,
-        'modulos_texto' => $modulos_human,
-        'incluye_presencial' => $incluye_presencial ? 'SI' : 'NO',
-        'incluye_virtual' => $incluye_virtual ? 'SI' : 'NO'
+        'soporte_pago' => $soporte_rel
       );
-
       $okAviso = $correo->sendAvisoNuevaInscripcion($com_email, $aviso);
       if (!$okAviso) {
         error_log('[AVISO_COMERCIAL] Falló el envío al comercial: ' . $com_email);
@@ -736,6 +691,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <h1 class="text-2xl font-bold text-[#942934] mb-4 text-center">
           Inscripción al evento: <?php echo htmlspecialchars($evento['nombre'], ENT_QUOTES, 'UTF-8'); ?>
         </h1>
+        <?php
+        $modLowUI = strtolower(trim($evento['modalidad'] ?? ''));
+        ?>
 
         <?php if ($mensaje_exito): ?>
           <div id="modalGracias" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -744,6 +702,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               <p class="text-gray-700 mb-4">
                 Gracias por registrarte. Hemos enviado un correo de confirmación a tu email corporativo.
               </p>
+
+              <!-- Acciones: usamos inline-style para evitar purgado -->
               <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:8px;">
                 <button type="button" onclick="otraInscripcion()"
                   style="background:#0ea5e9;color:#fff;padding:10px 18px;border-radius:12px;font-weight:600;">
@@ -758,6 +718,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           </div>
         <?php endif; ?>
 
+        <?php $mod = strtolower(trim($evento['modalidad'] ?? '')); ?>
+
         <?php if ($mod === 'hibrida'): ?>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div class="p-4 border border-gray-300 rounded-xl bg-white">
@@ -770,29 +732,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               <?php echo pintarFechasHtml($fechas_virtuales); ?>
             </div>
           </div>
+
+          <?php if (!empty($fechas_generales)): ?>
+            <div class="p-4 border border-yellow-300 rounded-xl bg-yellow-50 mb-4">
+              <div class="font-bold text-yellow-800 mb-2">⚠️ Fechas sin tipo (general)</div>
+              <?php echo pintarFechasHtml($fechas_generales); ?>
+            </div>
+          <?php endif; ?>
         <?php endif; ?>
-
-        <?php if ($mod === 'curso_especial'): ?>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div class="p-4 border border-gray-300 rounded-xl bg-white">
-              <div class="font-bold text-[#942934] mb-2">📍 Congreso / Presencial</div>
-              <?php echo pintarFechasHtml($fechas_presenciales); ?>
-            </div>
-            <div class="p-4 border border-gray-300 rounded-xl bg-white">
-              <div class="font-bold text-[#942934] mb-2">💻 Módulos virtuales</div>
-              <?php echo pintarModulosVirtualesHtml($modulos_virtuales); ?>
-            </div>
-          </div>
-
-          <div class="mb-4 p-4 border border-gray-300 rounded-xl bg-[#f8fafc]">
-            <div class="font-bold text-gray-900 mb-1">🧭 Elige tu tipo de inscripción</div>
-            <div class="text-sm text-gray-700">
-              Selecciona una opción para que tu registro quede exactamente con lo que necesitas.
-              El correo de confirmación mostrará con precisión tu elección.
-            </div>
-          </div>
-        <?php endif; ?>
-
         <?php if (!empty($evento['autoestudio']) && (int) $evento['autoestudio'] === 1): ?>
           <div class="mb-4 p-4 border border-gray-300 rounded-xl bg-green-50">
             <div class="font-bold text-green-800">✅ Este evento incluye Autoestudio</div>
@@ -801,6 +748,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             </div>
           </div>
         <?php endif; ?>
+
 
         <form method="POST" onsubmit="return preEnviar(event)" enctype="multipart/form-data" class="space-y-4">
           <input type="hidden" name="evento_id" value="<?php echo (int) $evento['id']; ?>">
@@ -815,6 +763,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             </label>
           </div>
 
+          <!-- NUEVOS CAMPOS -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input id="nombres" name="nombres" type="text" placeholder="Nombres" required
               class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
@@ -836,8 +785,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
           <input type="email" name="email_corporativo" placeholder="Email Corporativo" required
             class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
-
-          <?php if ($mod === 'virtual' && !empty($fechas)): ?>
+          <?php $modTmp = strtolower(trim($evento['modalidad'] ?? '')); ?>
+          <?php $esVirtual = ($modTmp === 'virtual'); ?>
+          <?php if ($esVirtual && !empty($fechas)): ?>
             <div class="p-4 border border-gray-300 rounded-xl">
               <div class="font-semibold text-gray-800 mb-2">Asistencia</div>
 
@@ -851,6 +801,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 Por módulos
               </label>
 
+              <!-- Checkboxes de módulos -->
               <div id="wrap_modulos" class="mt-3 hidden">
                 <div class="text-sm text-gray-600 mb-2">Elige uno o varios días:</div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -870,87 +821,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               </div>
             </div>
           <?php endif; ?>
-
-          <?php if ($mod === 'curso_especial'): ?>
-            <div class="p-4 border border-gray-300 rounded-xl">
-              <div class="font-semibold text-gray-900 mb-3">Selecciona tu opción</div>
-
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <label
-                  class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
-                  <input type="radio" name="curso_especial_opcion" value="CONGRESO" class="accent-[#942934]" checked>
-                  <div>
-                    <div class="font-semibold">Caso 1: Congreso (Presencial)</div>
-                    <div class="text-sm text-gray-600">Asistes únicamente al congreso presencial.</div>
-                  </div>
-                </label>
-
-                <label
-                  class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
-                  <input type="radio" name="curso_especial_opcion" value="CURSO_COMPLETO" class="accent-[#942934]">
-                  <div>
-                    <div class="font-semibold">Caso 2: Curso completo</div>
-                    <div class="text-sm text-gray-600">Presencial + todos los módulos virtuales.</div>
-                  </div>
-                </label>
-
-                <label
-                  class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
-                  <input type="radio" name="curso_especial_opcion" value="MODULOS_VIRTUALES" class="accent-[#942934]">
-                  <div>
-                    <div class="font-semibold">Caso 3: Módulos virtuales</div>
-                    <div class="text-sm text-gray-600">Seleccionas uno o más módulos virtuales (sin presencial).</div>
-                  </div>
-                </label>
-
-                <label
-                  class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
-                  <input type="radio" name="curso_especial_opcion" value="CONGRESO_MAS_MODULOS" class="accent-[#942934]">
-                  <div>
-                    <div class="font-semibold">Caso 4: Congreso + módulos</div>
-                    <div class="text-sm text-gray-600">Presencial + seleccionas uno o más módulos virtuales.</div>
-                  </div>
-                </label>
-              </div>
-
-              <div id="wrap_modulos_ce" class="mt-4 hidden">
-                <div class="font-semibold text-gray-800 mb-2">Elige tus módulos virtuales</div>
-
-                <?php if (!empty($modulos_virtuales)): ?>
-                  <div class="space-y-2">
-                    <?php for ($i = 0; $i < count($modulos_virtuales); $i++):
-                      $m = $modulos_virtuales[$i];
-                      $fechaTxt = date('d/m/Y', strtotime($m['fecha']));
-                      ?>
-                      <label class="flex gap-2 items-start p-3 border border-gray-200 rounded-xl">
-                        <input type="checkbox" name="modulos_virtuales[]" value="<?php echo (int) $m['id']; ?>"
-                          class="accent-[#942934] mt-1">
-                        <div>
-                          <div class="font-semibold text-gray-900">
-                            <?php echo htmlspecialchars($m['nombre'], ENT_QUOTES, 'UTF-8'); ?></div>
-                          <div class="text-sm text-gray-700">Fecha: <?php echo $fechaTxt; ?></div>
-                        </div>
-                      </label>
-                    <?php endfor; ?>
-                  </div>
-                  <div class="text-xs text-gray-500 mt-2">Selecciona al menos un módulo cuando esta opción lo requiera.</div>
-                <?php else: ?>
-                  <div class="text-sm text-gray-600">Este evento aún no tiene módulos virtuales configurados.</div>
-                <?php endif; ?>
-              </div>
-            </div>
-          <?php endif; ?>
-
           <input type="file" name="soporte_pago" accept=".pdf,image/*"
             class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
           <p class="text-sm text-black-500 -mt-2">Soporte de Asistencia Opcional (PDF o imagen - máx. 10 MB).</p>
-
           <div class="p-4 border border-gray-300 rounded-xl">
             <div class="font-semibold text-gray-800 mb-2">
               Acepto la vinculación del número celular aquí registrado al grupo de WhatsApp que tendrá como única
               finalidad
               socializar toda la información relacionada con el evento, lo que incluye programación, recordatorios,
-              capacitaciones y demás comunicaciones pertinentes.
+              capacitaciones
+              y demás comunicaciones pertinentes.
             </div>
             <label class="inline-flex items-center gap-2 mr-6">
               <input type="radio" name="whatsapp_consent" value="SI" class="accent-[#942934]" required> SI
@@ -959,7 +839,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               <input type="radio" name="whatsapp_consent" value="NO" class="accent-[#942934]" required> NO
             </label>
           </div>
-
           <div class="p-4 border border-gray-200 rounded-xl">
             <label for="medio_opcion" class="font-semibold text-gray-800 mb-2 block">¿Por qué medio se enteró?</label>
 
@@ -981,7 +860,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             Enviar inscripción
           </button>
         </form>
-
         <div id="loaderOverlay"
           style="position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:9999;">
           <div
@@ -992,203 +870,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <div style="font-size:13px;color:#6b7280;">Por favor espera, esto puede tardar algunos segundos.</div>
           </div>
         </div>
-
       <?php else: ?>
         <p class="text-red-600 text-center text-lg font-bold">⚠️ Evento no encontrado</p>
       <?php endif; ?>
     </div>
   </div>
 
-  <script src="../assets/js/jquery.min.js"></script>
   <script>
-    function validarFormulario() {
-      var correoEl = document.querySelector('input[name="email_corporativo"]');
-      var correo = (correoEl ? correoEl.value : '').trim();
-      var cedula = document.querySelector('input[name="cedula"]').value.trim();
-      var celular = document.querySelector('input[name="celular"]').value.trim();
-
-      if (!/^\d+$/.test(cedula)) {
-        alert("La cédula debe contener solo números.");
-        return false;
-      }
-      if (!/^\d{7,15}$/.test(celular)) {
-        alert("El celular debe contener entre 7 y 15 dígitos.");
-        return false;
-      }
-      if (!/^\S+@\S+\.\S+$/.test(correo)) {
-        alert("Correo corporativo inválido.");
-        return false;
-      }
-      return true;
-    }
-
-    function preEnviar(evt) {
-      if (typeof validarFormulario === 'function') {
-        if (!validarFormulario()) {
-          if (evt && evt.preventDefault) evt.preventDefault();
-          return false;
-        }
-      }
-
-      // Validación Curso Especial: módulos obligatorios en casos 3 y 4
-      var MODALIDAD = "<?php echo addslashes($mod); ?>";
-      if (MODALIDAD === 'curso_especial') {
-        var radios = document.getElementsByName('curso_especial_opcion');
-        var sel = 'CONGRESO';
-        for (var i = 0; i < radios.length; i++) {
-          if (radios[i].checked) sel = radios[i].value;
-        }
-        if (sel === 'MODULOS_VIRTUALES' || sel === 'CONGRESO_MAS_MODULOS') {
-          var wrap = document.getElementById('wrap_modulos_ce');
-          if (wrap) {
-            var checks = wrap.querySelectorAll('input[type="checkbox"]:checked');
-            if (!checks || checks.length === 0) {
-              alert('Por favor selecciona al menos un módulo virtual.');
-              if (evt && evt.preventDefault) evt.preventDefault();
-              return false;
-            }
-          }
-        }
-      }
-
-      var btn = document.querySelector('button[type="submit"]');
-      if (btn) {
-        btn.disabled = true;
-        btn.className += ' opacity-70 cursor-not-allowed';
-        btn.innerHTML = '<img src="../assets/img/loader-buho.gif" alt="" style="height:20px;width:auto;vertical-align:middle;margin-right:8px;"> Enviando…';
-      }
-
-      var overlay = document.getElementById('loaderOverlay');
-      if (overlay) overlay.style.display = 'flex';
-
-      return true;
-    }
-
-    (function () {
-      var entidad = document.getElementById('entidad');
-      if (!entidad) return;
-      entidad.addEventListener('input', function () {
-        var start = this.selectionStart, end = this.selectionEnd;
-        var v = this.value || '';
-        this.value = v.toUpperCase();
-        if (typeof start === 'number' && typeof end === 'number') {
-          this.setSelectionRange(start, end);
-        }
-      });
-    })();
-
-    (function () {
-      function toTitleCase(str) {
-        str = (str || '').toLowerCase();
-        var parts = str.split(/(\s+|-)/);
-        for (var i = 0; i < parts.length; i++) {
-          var s = parts[i];
-          if (s && !/^\s+$/.test(s) && s !== '-') {
-            parts[i] = s.charAt(0).toUpperCase() + s.slice(1);
-          }
-        }
-        return parts.join('');
-      }
-      function bindTitleCase(id) {
-        var el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('input', function () {
-          var pos = this.selectionStart;
-          var val = this.value || '';
-          var nuevo = toTitleCase(val);
-          if (nuevo !== val) {
-            this.value = nuevo;
-            if (typeof pos === 'number') this.setSelectionRange(pos, pos);
-          }
-        });
-      }
-      bindTitleCase('nombres');
-      bindTitleCase('apellidos');
-    })();
-
-    (function () {
-      var radios = document.getElementsByName('asistencia_tipo');
-      var wrap = document.getElementById('wrap_modulos');
-      if (!wrap || !radios || radios.length === 0) return;
-
-      function toggleModulos() {
-        var tipo = 'COMPLETO';
-        for (var i = 0; i < radios.length; i++) { if (radios[i].checked) tipo = radios[i].value; }
-        wrap.className = (tipo === 'MODULOS')
-          ? wrap.className.replace(' hidden', '')
-          : (wrap.className.indexOf('hidden') >= 0 ? wrap.className : wrap.className + ' hidden');
-      }
-
-      for (var i = 0; i < radios.length; i++) {
-        radios[i].addEventListener('change', toggleModulos);
-      }
-      toggleModulos();
-    })();
-
-    // Curso Especial: mostrar/ocultar selección de módulos
-    (function () {
-      var MODALIDAD = "<?php echo addslashes($mod); ?>";
-      if (MODALIDAD !== 'curso_especial') return;
-
-      var wrap = document.getElementById('wrap_modulos_ce');
-      var radios = document.getElementsByName('curso_especial_opcion');
-      if (!wrap || !radios || radios.length === 0) return;
-
-      function toggleCE() {
-        var sel = 'CONGRESO';
-        for (var i = 0; i < radios.length; i++) {
-          if (radios[i].checked) sel = radios[i].value;
-        }
-        if (sel === 'MODULOS_VIRTUALES' || sel === 'CONGRESO_MAS_MODULOS') {
-          wrap.classList.remove('hidden');
-        } else {
-          wrap.classList.add('hidden');
-          var checks = wrap.querySelectorAll('input[type="checkbox"]');
-          for (var j = 0; j < checks.length; j++) checks[j].checked = false;
-        }
-      }
-
-      for (var i = 0; i < radios.length; i++) {
-        radios[i].addEventListener('change', toggleCE);
-      }
-      toggleCE();
-    })();
-
-    function cerrarModalGracias() {
-      var modal = document.getElementById('modalGracias');
-      if (modal) modal.classList.add('hidden');
-      window.location.href = "https://fycconsultores.com/inicio";
-    }
-
-    var SLUG_ACTUAL = "<?php echo isset($slug) ? addslashes($slug) : ''; ?>";
-    if (!SLUG_ACTUAL) {
-      var m = location.search.match(/[?&]e=([^&]+)/);
-      if (m) { try { SLUG_ACTUAL = decodeURIComponent(m[1].replace(/\+/g, ' ')); } catch (e) { } }
-    }
-
-    function otraInscripcion() {
-      window.location.href = "registro.php?e=" + encodeURIComponent(SLUG_ACTUAL);
-    }
-
-    (function () {
-      var sel = document.getElementById('medio_opcion');
-      var otro = document.getElementById('medio_otro');
-      if (!sel || !otro) return;
-
-      function toggleOtro() {
-        if (sel.value === 'OTRO') {
-          otro.classList.remove('hidden');
-          otro.required = true;
-        } else {
-          otro.classList.add('hidden');
-          otro.required = false;
-          otro.value = '';
-        }
-      }
-      sel.addEventListener('change', toggleOtro);
-      toggleOtro();
-    })();
+    window.__SLUG_ACTUAL = "<?php echo isset($slug) ? addslashes($slug) : ''; ?>";
   </script>
+  <script src="assets/js/registro.js?v=1"></script>
 </body>
 
 </html>

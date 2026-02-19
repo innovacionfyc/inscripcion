@@ -16,7 +16,7 @@ function generarSlug($texto)
 /* Lugar por defecto para eventos presenciales (el que usas en los correos) */
 $DEFAULT_LUGAR_PRESENCIAL = "Centro de Convenciones Cafam Floresta\nAv. Cra. 68 No. 90-88, Bogotá - Salón Sauces";
 
-// Cargar usuarios comerciales desde la BD
+// 📌 Cargar usuarios comerciales desde la BD
 $comerciales = [];
 $sqlUsuarios = "SELECT id, nombre, email, whatsapp FROM usuarios WHERE activo = 1 ORDER BY nombre ASC";
 $resUsuarios = $conn->query($sqlUsuarios);
@@ -26,7 +26,8 @@ if ($resUsuarios && $resUsuarios->num_rows > 0) {
   }
 }
 
-// Helper: guardarAdjuntos (múltiples archivos)
+// === Helper: guardarAdjuntos (múltiples archivos) ===
+// Compatible con PHP viejito (maneja tanto inputs [] como uno solo)
 if (!function_exists('guardarAdjuntos')) {
   function guardarAdjuntos($inputName, $destDir)
   {
@@ -34,12 +35,14 @@ if (!function_exists('guardarAdjuntos')) {
     if (!isset($_FILES[$inputName]))
       return 0;
 
+    // Crea la carpeta destino si no existe
     if (!is_dir($destDir)) {
       @mkdir($destDir, 0775, true);
     }
 
     $moved = 0;
 
+    // Unificar a arrays (por si no usaron [])
     $names = $_FILES[$inputName]['name'];
     $tmps = $_FILES[$inputName]['tmp_name'];
     $errs = $_FILES[$inputName]['error'];
@@ -67,9 +70,11 @@ if (!function_exists('guardarAdjuntos')) {
       if (!in_array($ext, $permitidas))
         continue;
 
+      // Límite 25MB por archivo
       if ($size > 25 * 1024 * 1024)
         continue;
 
+      // Nombre seguro + único
       $seguro = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $name);
       $seguro = date('Ymd_His') . '_' . mt_rand(1000, 9999) . '_' . $seguro;
 
@@ -86,23 +91,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $modalidad = $_POST["modalidad"] ?? '';
   $fecha_limite = $_POST["fecha_limite"] ?? '';
   $comercial_id = $_POST["comercial_user_id"] ?? null;
+  $autoestudio = isset($_POST['autoestudio']) ? 1 : 0;
 
-  // Flags (mantengo compatibilidad con tu código)
+  // ✅ OBJETIVO 2: Autoestudio + Trabajo integrador (flags)
   $autoestudio = isset($_POST['autoestudio']) ? 1 : 0;
   $trabajo_integrador = isset($_POST['trabajo_integrador']) ? 1 : 0;
 
-  $modLow = strtolower(trim($modalidad));
-
-  // Lugar personalizado: aplica a modalidades que tienen bloque presencial
+  // === lugar personalizado
   $cambiar_lugar = isset($_POST['cambiar_lugar']) ? strtoupper(trim($_POST['cambiar_lugar'])) : 'NO';
   $lugar_personalizado = null;
-  if (($modLow === 'presencial' || $modLow === 'hibrida' || $modLow === 'curso_especial') && $cambiar_lugar === 'SI') {
+  if (strtolower($modalidad) === 'presencial' && $cambiar_lugar === 'SI') {
     $lugar_personalizado = trim($_POST['lugar_personalizado'] ?? '');
     if ($lugar_personalizado === '')
       $lugar_personalizado = null;
   }
 
-  // Upload imagen principal del evento
+  // --- Upload imagen principal del evento ---
   $nombreImagen = '';
   if (!empty($_FILES['imagen']['name']) && $_FILES['imagen']['error'] === 0) {
     $uploadsDir = dirname(__DIR__) . '/uploads/eventos/';
@@ -113,7 +117,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     move_uploaded_file($_FILES['imagen']['tmp_name'], $uploadsDir . $nombreImagen);
   }
 
-  // INSERT evento
+  // INSERT (agrega autoestudio/trabajo_integrador)
   $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, lugar_personalizado, fecha_limite, comercial_user_id, autoestudio) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
   $stmt->bind_param("ssssssii", $nombre, $slug, $nombreImagen, $modalidad, $lugar_personalizado, $fecha_limite, $comercial_id, $autoestudio);
 
@@ -121,17 +125,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $evento_id = $stmt->insert_id;
     $stmt->close();
 
-    // =========================================================
-    // 1) Guardar fechas/horarios (eventos_fechas)
-    //    - Presencial / Virtual / Hibrida: como ya estaba
-    //    - Curso Especial: SOLO fechas presenciales (tipo = presencial)
-    // =========================================================
+    // ===============================
+    // Guardar fechas/horarios
+    // (Soporta Presencial / Virtual / Híbrida)
+    // ===============================
+    $modLow = strtolower(trim($modalidad));
+
     $stmt_fecha = $conn->prepare("INSERT INTO eventos_fechas (evento_id, tipo, fecha, hora_inicio, hora_fin) VALUES (?, ?, ?, ?, ?)");
     $tipo = $fecha = $hora_inicio = $hora_fin = null;
     $stmt_fecha->bind_param("issss", $evento_id, $tipo, $fecha, $hora_inicio, $hora_fin);
 
     if ($modLow === 'hibrida') {
 
+      // Presenciales
       $fechasP = $_POST["fechas_presencial"] ?? [];
       $hinP = $_POST["hora_inicio_presencial"] ?? [];
       $hfinP = $_POST["hora_fin_presencial"] ?? [];
@@ -145,6 +151,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           $stmt_fecha->execute();
       }
 
+      // Virtuales
       $fechasV = $_POST["fechas_virtual"] ?? [];
       $hinV = $_POST["hora_inicio_virtual"] ?? [];
       $hfinV = $_POST["hora_fin_virtual"] ?? [];
@@ -164,12 +171,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $hin = $_POST["hora_inicio"] ?? [];
       $hfin = $_POST["hora_fin"] ?? [];
 
-      // Curso Especial se comporta como "bloque presencial"
-      if ($modLow === 'curso_especial') {
-        $tipoNormal = 'presencial';
-      } else {
-        $tipoNormal = ($modLow === 'presencial') ? 'presencial' : (($modLow === 'virtual') ? 'virtual' : 'general');
-      }
+      $tipoNormal = ($modLow === 'presencial') ? 'presencial' : (($modLow === 'virtual') ? 'virtual' : 'general');
 
       for ($i = 0; $i < count($fechas); $i++) {
         $tipo = $tipoNormal;
@@ -183,72 +185,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $stmt_fecha->close();
 
-    // =========================================================
-    // 2) Curso Especial: Guardar Módulos Virtuales (máx 10)
-    //    en eventos_modulos_virtuales
-    // =========================================================
-    if ($modLow === 'curso_especial') {
-      $mods_fecha = $_POST['modulos_fecha'] ?? [];
-      $mods_hi = $_POST['modulos_hora_inicio'] ?? [];
-      $mods_hf = $_POST['modulos_hora_fin'] ?? [];
-      $mods_nom = $_POST['modulos_nombre'] ?? [];
-
-      // Normalizar arrays
-      if (!is_array($mods_fecha))
-        $mods_fecha = [];
-      if (!is_array($mods_hi))
-        $mods_hi = [];
-      if (!is_array($mods_hf))
-        $mods_hf = [];
-      if (!is_array($mods_nom))
-        $mods_nom = [];
-
-      // Insert preparado
-      $stmt_mod = $conn->prepare("INSERT INTO eventos_modulos_virtuales (evento_id, orden, fecha, hora_inicio, hora_fin, nombre, activo) VALUES (?, ?, ?, ?, ?, ?, 1)");
-      $orden = 1;
-      $mfecha = $mhi = $mhf = $mnom = null;
-      $stmt_mod->bind_param("iissss", $evento_id, $orden, $mfecha, $mhi, $mhf, $mnom);
-
-      $insertados = 0;
-      for ($i = 0; $i < count($mods_fecha); $i++) {
-        if ($insertados >= 10)
-          break;
-
-        $mfecha = trim($mods_fecha[$i] ?? '');
-        $mhi = trim($mods_hi[$i] ?? '');
-        $mhf = trim($mods_hf[$i] ?? '');
-        $mnom = trim($mods_nom[$i] ?? '');
-
-        // Si la fila está vacía, la saltamos
-        if ($mfecha === '' && $mnom === '' && $mhi === '' && $mhf === '') {
-          continue;
-        }
-
-        // Validación mínima: fecha y nombre obligatorios para guardar
-        if ($mfecha === '' || $mnom === '') {
-          // Si llega incompleto, lo ignoramos para no romper el flujo.
-          continue;
-        }
-
-        $orden = $insertados + 1;
-        $stmt_mod->execute();
-        $insertados++;
-      }
-
-      $stmt_mod->close();
-    }
-
-    // =========================================================
-    // 3) Adjuntos por modalidad (docs/...)
-    //    - Curso Especial: permite adjuntar presencial y virtual
-    // =========================================================
+    // === ADJUNTOS POR MODALIDAD → docs/evento_{virtual|presencial}/{evento_id}/ ===
     $baseDocs = dirname(__DIR__) . '/docs';
+    $modLow = strtolower(trim($modalidad));
 
-    // Adjuntos Autoestudio
+    // === ADJUNTOS AUTOESTUDIO → docs/autoestudio/{evento_id}/ ===
     if ((int) $autoestudio === 1) {
       $destA = $baseDocs . '/autoestudio/' . (int) $evento_id;
       guardarAdjuntos('docs_autoestudio', $destA);
     }
+
 
     if ($modLow === 'virtual') {
       $dest = $baseDocs . '/evento_virtual/' . (int) $evento_id;
@@ -262,16 +208,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       $destP = $baseDocs . '/evento_presencial/' . (int) $evento_id;
       guardarAdjuntos('docs_presencial', $destP);
-    } elseif ($modLow === 'curso_especial') {
-      // En Curso Especial dejamos adjuntar ambos (porque hay congreso + módulos virtuales)
-      $destV = $baseDocs . '/evento_virtual/' . (int) $evento_id;
-      guardarAdjuntos('docs_virtual', $destV);
-
-      $destP = $baseDocs . '/evento_presencial/' . (int) $evento_id;
-      guardarAdjuntos('docs_presencial', $destP);
     }
 
-    // Compatibilidad (tus flags)
+    // ✅ OBJETIVO 2: adjuntos autoestudio + trabajo integrador
+    if ($autoestudio) {
+      $destA = $baseDocs . '/autoestudio/' . (int) $evento_id;
+      guardarAdjuntos('docs_autoestudio', $destA);
+    }
     if ($trabajo_integrador) {
       $destT = $baseDocs . '/trabajo_integrador/' . (int) $evento_id;
       guardarAdjuntos('docs_trabajo_integrador', $destT);
@@ -280,7 +223,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $conn->close();
     header("Location: " . basename(__FILE__) . "?ok=1&slug=" . urlencode($slug));
     exit;
-
   } else {
     $error = "Error al guardar el evento: " . $stmt->error;
     $stmt->close();
@@ -354,38 +296,33 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           <option value="">Selecciona...</option>
           <?php foreach ($comerciales as $c): ?>
             <option value="<?php echo $c['id']; ?>">
-              <?php echo htmlspecialchars($c['nombre']); ?> (
-              <?php echo htmlspecialchars($c['email']); ?>)
+              <?php echo htmlspecialchars($c['nombre']); ?> (<?php echo htmlspecialchars($c['email']); ?>)
             </option>
           <?php endforeach; ?>
         </select>
       </div>
 
       <div>
+        <!-- Normal (Presencial o Virtual): un solo número de días -->
         <div id="wrap_num_dias_normal">
           <label class="font-semibold text-gray-700">¿Cuántos días dura el evento?</label>
           <select id="num_dias" class="w-full p-3 border border-gray-300 rounded-xl mt-2">
             <option value="">Selecciona...</option>
             <?php for ($i = 1; $i <= 10; $i++): ?>
-              <option value="<?php echo $i; ?>">
-                <?php echo $i; ?> día
-                <?php echo ($i > 1 ? 's' : ''); ?>
-              </option>
+              <option value="<?php echo $i; ?>"><?php echo $i; ?> día<?php echo ($i > 1 ? 's' : ''); ?></option>
             <?php endfor; ?>
           </select>
         </div>
         <div id="dias_container" class="space-y-4"></div>
 
+        <!-- Híbrida: días independientes -->
         <div id="wrap_num_dias_hibrida" class="hidden space-y-4">
           <div>
             <label class="font-semibold text-gray-700">¿Cuántos días PRESENCIALES?</label>
             <select id="num_dias_presencial" class="w-full p-3 border border-gray-300 rounded-xl mt-2">
               <option value="">Selecciona...</option>
               <?php for ($i = 1; $i <= 10; $i++): ?>
-                <option value="<?php echo $i; ?>">
-                  <?php echo $i; ?> día
-                  <?php echo ($i > 1 ? 's' : ''); ?>
-                </option>
+                <option value="<?php echo $i; ?>"><?php echo $i; ?> día<?php echo ($i > 1 ? 's' : ''); ?></option>
               <?php endfor; ?>
             </select>
           </div>
@@ -395,10 +332,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
             <select id="num_dias_virtual" class="w-full p-3 border border-gray-300 rounded-xl mt-2">
               <option value="">Selecciona...</option>
               <?php for ($i = 1; $i <= 10; $i++): ?>
-                <option value="<?php echo $i; ?>">
-                  <?php echo $i; ?> día
-                  <?php echo ($i > 1 ? 's' : ''); ?>
-                </option>
+                <option value="<?php echo $i; ?>"><?php echo $i; ?> día<?php echo ($i > 1 ? 's' : ''); ?></option>
               <?php endfor; ?>
             </select>
           </div>
@@ -416,35 +350,15 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
 
         <div class="mt-4">
           <label class="font-semibold text-gray-700">Modalidad:</label>
-          <select id="modalidad" name="modalidad" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
+          <select name="modalidad" required class="w-full p-3 border border-gray-300 rounded-xl mt-2">
             <option value="">Selecciona...</option>
             <option value="Presencial">Presencial</option>
             <option value="Virtual">Virtual</option>
             <option value="Hibrida">Híbrida</option>
-            <option value="Curso_Especial">Curso Especial</option>
           </select>
         </div>
 
-        <!-- Curso Especial: módulos virtuales (máx 10) -->
-        <div id="curso_especial_wrap" class="mt-4 p-4 border border-gray-200 rounded-xl hidden">
-          <div class="flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <div class="font-semibold text-gray-800">Módulos virtuales (máx 10)</div>
-              <div class="text-sm text-gray-600 mt-1">Configura fecha, hora y nombre/tema de cada módulo.</div>
-            </div>
-            <button type="button" id="btnAddModulo"
-              class="bg-[#0ea5e9] hover:bg-[#0284c7] text-white font-bold px-4 py-2 rounded-xl transition-all">
-              + Agregar módulo
-            </button>
-          </div>
-
-          <div id="modulos_virtuales_container" class="mt-4 space-y-3"></div>
-
-          <div class="text-xs text-gray-500 mt-3">
-            Nota: Si no agregas módulos, el evento igual se puede crear (solo congreso/presencial).
-          </div>
-        </div>
-
+        <!-- Cambiar lugar -->
         <div id="wrapCambiarLugar" class="mt-3 p-4 border border-gray-200 rounded-xl hidden">
           <div class="font-semibold mb-2">¿Deseas cambiar el lugar por defecto?</div>
           <label class="inline-flex items-center gap-2 mr-4">
@@ -461,6 +375,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
             placeholder="Escribe aquí el lugar del evento" disabled></textarea>
         </div>
 
+        <!-- Adjuntos modalidad -->
         <div id="docs_virtual_wrap" style="display:none; margin-top:12px;">
           <label class="block font-semibold mb-1">Adjuntos para evento virtual</label>
           <input type="file" name="docs_virtual[]" multiple class="w-full p-3 border border-gray-300 rounded-xl">
@@ -473,6 +388,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           <small class="text-gray-500">Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB c/u.</small>
         </div>
 
+        <!-- ✅ OBJETIVO 2 -->
         <div class="mt-4 p-4 border border-gray-200 rounded-xl">
           <div class="font-semibold text-gray-700 mb-2">Autoestudio y trabajo integrador</div>
 
@@ -499,12 +415,14 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
             Crear evento
           </button>
         </div>
+
       </div>
     </form>
   </div>
 
   <script src="../assets/js/jquery.min.js"></script>
   <script>
+    // ===== Adjuntos por modalidad + bloque "Cambiar lugar" =====
     (function () {
       function fycGetModalidad() {
         var sel = document.querySelector('select[name="modalidad"], #modalidad');
@@ -519,10 +437,8 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
 
         var vWrap = document.getElementById('docs_virtual_wrap');
         var pWrap = document.getElementById('docs_presencial_wrap');
-
-        // Curso Especial: permite adjuntar ambos
-        if (vWrap) vWrap.style.display = (v === 'virtual' || v === 'hibrida' || v === 'curso_especial') ? 'block' : 'none';
-        if (pWrap) pWrap.style.display = (v === 'presencial' || v === 'hibrida' || v === 'curso_especial') ? 'block' : 'none';
+        if (vWrap) vWrap.style.display = (v === 'virtual' || v === 'hibrida') ? 'block' : 'none';
+        if (pWrap) pWrap.style.display = (v === 'presencial' || v === 'hibrida') ? 'block' : 'none';
 
         // wrappers días
         var wrapNormal = document.getElementById('wrap_num_dias_normal');
@@ -532,6 +448,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         var presWrap = document.getElementById('dias_presencial_wrap');
         var virtWrap = document.getElementById('dias_virtual_wrap');
 
+        // Limpieza selects para no mezclar
         var selN = document.getElementById('num_dias');
         var selP = document.getElementById('num_dias_presencial');
         var selV = document.getElementById('num_dias_virtual');
@@ -545,7 +462,6 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           if (presWrap) presWrap.classList.remove('hidden');
           if (virtWrap) virtWrap.classList.remove('hidden');
         } else {
-          // Presencial, Virtual o Curso Especial: usa flujo normal (un solo selector de días)
           if (wrapNormal) wrapNormal.classList.remove('hidden');
           if (wrapH) wrapH.classList.add('hidden');
 
@@ -556,21 +472,14 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           if (virtWrap) virtWrap.classList.add('hidden');
         }
 
-        // Curso Especial: mostrar bloque módulos
-        var ceWrap = document.getElementById('curso_especial_wrap');
-        if (ceWrap) {
-          if (v === 'curso_especial') ceWrap.classList.remove('hidden');
-          else ceWrap.classList.add('hidden');
-        }
-
-        // mostrar bloque cambiar lugar si hay presencial
+        // mostrar bloque cambiar lugar
         var lugarWrap = document.getElementById('wrapCambiarLugar');
         var rSi = document.getElementById('lugar_si');
         var rNo = document.getElementById('lugar_no');
         var ta = document.getElementById('lugar_personalizado');
 
         if (lugarWrap) {
-          if (v === 'presencial' || v === 'hibrida' || v === 'curso_especial') {
+          if (v === 'presencial' || v === 'hibrida') {
             lugarWrap.classList.remove('hidden');
             var si = rSi && rSi.checked;
             if (ta) {
@@ -605,6 +514,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
       else fycBind();
     })();
 
+    // ✅ OBJETIVO 2: Toggle adjuntos Autoestudio
     (function () {
       function toggleAutoestudio() {
         var chk = document.getElementById('autoestudio');
@@ -615,6 +525,8 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           wrap.classList.remove('hidden');
         } else {
           wrap.classList.add('hidden');
+
+          // opcional: limpiar archivos seleccionados
           var input = wrap.querySelector('input[type="file"]');
           if (input) input.value = '';
         }
@@ -623,7 +535,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
       function bindAutoestudio() {
         var chk = document.getElementById('autoestudio');
         if (chk) chk.addEventListener('change', toggleAutoestudio);
-        toggleAutoestudio();
+        toggleAutoestudio(); // estado inicial
       }
 
       if (document.readyState === 'loading') {
@@ -633,6 +545,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
       }
     })();
 
+    // ===== Generador de días/horarios (soporta híbrida con días independientes) =====
     (function () {
       function byId(id) { return document.getElementById(id); }
 
@@ -775,82 +688,6 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
 
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindDias);
       else bindDias();
-    })();
-
-    // Curso Especial: builder de módulos virtuales (máx 10)
-    (function () {
-      function byId(id) { return document.getElementById(id); }
-
-      function addModuloRow(prefill) {
-        var cont = byId('modulos_virtuales_container');
-        if (!cont) return;
-
-        var rows = cont.getElementsByClassName('ce-mod-row');
-        if (rows && rows.length >= 10) {
-          alert('Máximo 10 módulos virtuales.');
-          return;
-        }
-
-        var idx = (rows ? rows.length : 0) + 1;
-        var v = prefill || { fecha: '', hi: '', hf: '', nombre: '' };
-
-        var div = document.createElement('div');
-        div.className = 'ce-mod-row p-3 border border-gray-200 rounded-xl';
-
-        div.innerHTML = ''
-          + '<div class="flex items-center justify-between gap-2 mb-2">'
-          + '  <div class="font-semibold text-gray-800">Módulo ' + idx + '</div>'
-          + '  <button type="button" class="ce-del text-sm font-bold text-red-600">Quitar</button>'
-          + '</div>'
-          + '<div class="grid grid-cols-1 md:grid-cols-4 gap-3">'
-          + '  <div>'
-          + '    <label class="block text-sm font-medium mb-1">Fecha</label>'
-          + '    <input type="date" name="modulos_fecha[]" value="' + (v.fecha || '') + '" class="w-full p-3 border border-gray-300 rounded-xl">'
-          + '  </div>'
-          + '  <div>'
-          + '    <label class="block text-sm font-medium mb-1">Hora inicio</label>'
-          + '    <input type="time" name="modulos_hora_inicio[]" value="' + (v.hi || '') + '" class="w-full p-3 border border-gray-300 rounded-xl">'
-          + '  </div>'
-          + '  <div>'
-          + '    <label class="block text-sm font-medium mb-1">Hora fin</label>'
-          + '    <input type="time" name="modulos_hora_fin[]" value="' + (v.hf || '') + '" class="w-full p-3 border border-gray-300 rounded-xl">'
-          + '  </div>'
-          + '  <div>'
-          + '    <label class="block text-sm font-medium mb-1">Nombre / Tema</label>'
-          + '    <input type="text" name="modulos_nombre[]" value="' + (v.nombre || '').replace(/"/g, '&quot;') + '" placeholder="Ej: Módulo 1 - Control interno" class="w-full p-3 border border-gray-300 rounded-xl">'
-          + '  </div>'
-          + '</div>';
-
-        cont.appendChild(div);
-
-        var btnDel = div.querySelector('.ce-del');
-        if (btnDel) {
-          btnDel.addEventListener('click', function () {
-            div.parentNode.removeChild(div);
-            renumerar();
-          });
-        }
-      }
-
-      function renumerar() {
-        var cont = byId('modulos_virtuales_container');
-        if (!cont) return;
-        var rows = cont.getElementsByClassName('ce-mod-row');
-        for (var i = 0; i < rows.length; i++) {
-          var t = rows[i].querySelector('.font-semibold');
-          if (t) t.textContent = 'Módulo ' + (i + 1);
-        }
-      }
-
-      function bindCE() {
-        var btn = byId('btnAddModulo');
-        if (btn) btn.addEventListener('click', function () { addModuloRow(); });
-
-        // No añadimos módulo por defecto; el admin decide.
-      }
-
-      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindCE);
-      else bindCE();
     })();
 
     function copiarURL() {
