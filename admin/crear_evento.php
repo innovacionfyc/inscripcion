@@ -517,12 +517,15 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
       function fycToggleAdjuntosYLugar() {
         var v = fycGetModalidad();
 
+        // ✅ NORMALIZACIÓN (para soportar "Curso Especial" y "Curso_Especial")
+        var vNorm = (v || '').toLowerCase().replace(/\s+/g, '_');
+
         var vWrap = document.getElementById('docs_virtual_wrap');
         var pWrap = document.getElementById('docs_presencial_wrap');
 
         // Curso Especial: permite adjuntar ambos
-        if (vWrap) vWrap.style.display = (v === 'virtual' || v === 'hibrida' || v === 'curso_especial') ? 'block' : 'none';
-        if (pWrap) pWrap.style.display = (v === 'presencial' || v === 'hibrida' || v === 'curso_especial') ? 'block' : 'none';
+        if (vWrap) vWrap.style.display = (vNorm === 'virtual' || vNorm === 'hibrida' || vNorm === 'curso_especial') ? 'block' : 'none';
+        if (pWrap) pWrap.style.display = (vNorm === 'presencial' || vNorm === 'hibrida' || vNorm === 'curso_especial') ? 'block' : 'none';
 
         // wrappers días
         var wrapNormal = document.getElementById('wrap_num_dias_normal');
@@ -536,7 +539,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         var selP = document.getElementById('num_dias_presencial');
         var selV = document.getElementById('num_dias_virtual');
 
-        if (v === 'hibrida') {
+        if (vNorm === 'hibrida') {
           if (wrapNormal) wrapNormal.classList.add('hidden');
           if (wrapH) wrapH.classList.remove('hidden');
 
@@ -559,8 +562,13 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         // Curso Especial: mostrar bloque módulos
         var ceWrap = document.getElementById('curso_especial_wrap');
         if (ceWrap) {
-          if (v === 'curso_especial') ceWrap.classList.remove('hidden');
-          else ceWrap.classList.add('hidden');
+          if (vNorm === 'curso_especial') {
+            ceWrap.classList.remove('hidden');
+            // ✅ Asegurar que el botón quede “amarrado” siempre
+            if (typeof window.__bindCE === 'function') window.__bindCE();
+          } else {
+            ceWrap.classList.add('hidden');
+          }
         }
 
         // mostrar bloque cambiar lugar si hay presencial
@@ -570,7 +578,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         var ta = document.getElementById('lugar_personalizado');
 
         if (lugarWrap) {
-          if (v === 'presencial' || v === 'hibrida' || v === 'curso_especial') {
+          if (vNorm === 'presencial' || vNorm === 'hibrida' || vNorm === 'curso_especial') {
             lugarWrap.classList.remove('hidden');
             var si = rSi && rSi.checked;
             if (ta) {
@@ -844,10 +852,21 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
 
       function bindCE() {
         var btn = byId('btnAddModulo');
-        if (btn) btn.addEventListener('click', function () { addModuloRow(); });
+        if (!btn) return;
 
-        // No añadimos módulo por defecto; el admin decide.
+        // Evitar doble bind si se llama más de una vez
+        if (btn.getAttribute('data-bound') === '1') return;
+        btn.setAttribute('data-bound', '1');
+
+        btn.addEventListener('click', function () {
+          addModuloRow();
+          // por si el usuario está en iframe / o cambia altura
+          if (typeof window.__renderDias === 'function') window.__renderDias();
+        });
       }
+
+      // ✅ Exponer bindCE para que se pueda llamar cuando se muestre Curso Especial
+      window.__bindCE = bindCE;
 
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindCE);
       else bindCE();
