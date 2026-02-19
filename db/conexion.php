@@ -16,8 +16,10 @@ if (file_exists(__DIR__ . '/conexion.local.php')) {
 // ===============================
 $dbname = 'inscritos_db';
 $host = 'localhost';
-$user = 'ErickCer1818';
-$pass = 'ElManCertifica18#';
+/* $user = 'ErickCer1818';
+$pass = 'ElManCertifica18#'; */
+$user = 'root';
+$pass = '';
 
 $conn = new mysqli($host, $user, $pass, $dbname);
 
