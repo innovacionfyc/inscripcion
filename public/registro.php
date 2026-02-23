@@ -743,7 +743,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <div class="bg-white p-6 rounded-2xl shadow-2xl text-center" style="max-width:520px;width:92%;">
               <h2 class="text-xl font-bold text-[#942934] mb-4">🎉 ¡Inscripción exitosa!</h2>
               <p class="text-gray-700 mb-4">
-                Gracias por registrarte. Hemos enviado un correo de confirmación a tu email corporativo.
+                Gracias por registrarse. Hemos enviado un correo de confirmación a su email corporativo.
               </p>
               <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:8px;">
                 <button type="button" onclick="otraInscripcion()"
@@ -786,10 +786,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           </div>
 
           <div class="mb-4 p-4 border border-gray-300 rounded-xl bg-[#f8fafc]">
-            <div class="font-bold text-gray-900 mb-1">🧭 Elige tu tipo de inscripción</div>
+            <div class="font-bold text-gray-900 mb-1">🧭 Elija su tipo de inscripción</div>
             <div class="text-sm text-gray-700">
-              Selecciona una opción para que tu registro quede exactamente con lo que necesitas.
-              El correo de confirmación mostrará con precisión tu elección.
+              Seleccione una opción para que su registro quede exactamente con lo que necesita. El correo de confirmación
+              mostrará con precisión su elección.
             </div>
           </div>
         <?php endif; ?>
@@ -798,7 +798,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <div class="mb-4 p-4 border border-gray-300 rounded-xl bg-green-50">
             <div class="font-bold text-green-800">✅ Este evento incluye Autoestudio</div>
             <div class="text-sm text-green-700 mt-1">
-              Recibirás la información correspondiente en los canales oficiales del evento.
+              Recibirá la información correspondiente en los canales oficiales del evento.
             </div>
           </div>
         <?php endif; ?>
@@ -853,7 +853,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               </label>
 
               <div id="wrap_modulos" class="mt-3 hidden">
-                <div class="text-sm text-gray-600 mb-2">Elige uno o varios días:</div>
+                <div class="text-sm text-gray-600 mb-2">Elija uno o varios días:</div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <?php for ($i = 0; $i < count($fechas); $i++):
                     $dia = $i + 1;
@@ -867,14 +867,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     </label>
                   <?php endfor; ?>
                 </div>
-                <p class="text-xs text-gray-500 mt-2">Selecciona al menos un día.</p>
+                <p class="text-xs text-gray-500 mt-2">Seleccione al menos un día.</p>
               </div>
             </div>
           <?php endif; ?>
 
           <?php if ($mod === 'curso_especial'): ?>
             <div class="p-4 border border-gray-300 rounded-xl">
-              <div class="font-semibold text-gray-900 mb-3">Selecciona tu opción</div>
+              <div class="font-semibold text-gray-900 mb-3">Seleccione su opción</div>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label
@@ -882,7 +882,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                   <input type="radio" name="curso_especial_opcion" value="CONGRESO" class="accent-[#942934]" checked>
                   <div>
                     <div class="font-semibold">Opción 1: Congreso (Presencial)</div>
-                    <div class="text-sm text-gray-600">Asistes únicamente al congreso presencial.</div>
+                    <div class="text-sm text-gray-600">Asiste únicamente al congreso presencial.</div>
                   </div>
                 </label>
 
@@ -900,7 +900,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                   <input type="radio" name="curso_especial_opcion" value="MODULOS_VIRTUALES" class="accent-[#942934]">
                   <div>
                     <div class="font-semibold">Opción 3: Módulos virtuales</div>
-                    <div class="text-sm text-gray-600">Seleccionas uno o más módulos virtuales (sin presencial).</div>
+                    <div class="text-sm text-gray-600">Seleccione uno o más módulos virtuales (sin presencial).</div>
                   </div>
                 </label>
 
@@ -909,13 +909,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                   <input type="radio" name="curso_especial_opcion" value="CONGRESO_MAS_MODULOS" class="accent-[#942934]">
                   <div>
                     <div class="font-semibold">Opción 4: Congreso + módulos</div>
-                    <div class="text-sm text-gray-600">Presencial + seleccionas uno o más módulos virtuales.</div>
+                    <div class="text-sm text-gray-600">Presencial + seleccione uno o más módulos virtuales.</div>
                   </div>
                 </label>
               </div>
 
               <div id="wrap_modulos_ce" class="mt-4 hidden">
-                <div class="font-semibold text-gray-800 mb-2">Elige tus módulos virtuales</div>
+                <div class="font-semibold text-gray-800 mb-2">Elija sus módulos virtuales</div>
 
                 <?php if (!empty($modulos_virtuales)): ?>
                   <div class="space-y-2">
@@ -935,7 +935,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                       </label>
                     <?php endfor; ?>
                   </div>
-                  <div class="text-xs text-gray-500 mt-2">Selecciona al menos un módulo cuando esta opción lo requiera.</div>
+                  <div class="text-xs text-gray-500 mt-2">Seleccione al menos un módulo cuando esta opción lo requiera.</div>
                 <?php else: ?>
                   <div class="text-sm text-gray-600">Este evento aún no tiene módulos virtuales configurados.</div>
                 <?php endif; ?>
@@ -990,8 +990,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             style="background:#fff;padding:22px 26px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);text-align:center;max-width:340px;">
             <img src="../assets/img/loader-buho.gif" alt="Cargando…"
               style="width:140px;height:auto;display:block;margin:0 auto 10px;">
-            <div style="font-weight:700;color:#111827;margin-bottom:4px;">Enviando tu inscripción…</div>
-            <div style="font-size:13px;color:#6b7280;">Por favor espera, esto puede tardar algunos segundos.</div>
+            <div style="font-weight:700;color:#111827;margin-bottom:4px;">Enviando su inscripción…</div>
+            <div style="font-size:13px;color:#6b7280;">Por favor espere, esto puede tardar algunos segundos.</div>
           </div>
         </div>
 
