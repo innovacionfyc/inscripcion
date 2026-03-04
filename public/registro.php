@@ -22,16 +22,17 @@ function norm_modalidad($m)
 
 $evento = null;
 
-$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre, lugar_personalizado, autoestudio FROM eventos WHERE slug = ? LIMIT 1');
+$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, tipo_evento_presencial, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre, lugar_personalizado, autoestudio FROM eventos WHERE slug = ? LIMIT 1');
 $stmt->bind_param('s', $slug);
 $stmt->execute();
-$stmt->bind_result($ev_id, $ev_nombre, $ev_imagen, $ev_modalidad, $ev_fecha_limite, $ev_wa, $ev_firma, $ev_encargado, $ev_lugar, $ev_autoestudio);
+$stmt->bind_result($ev_id, $ev_nombre, $ev_imagen, $ev_modalidad, $ev_tipo_pres, $ev_fecha_limite, $ev_wa, $ev_firma, $ev_encargado, $ev_lugar, $ev_autoestudio);
 if ($stmt->fetch()) {
   $evento = array(
     'id' => $ev_id,
     'nombre' => $ev_nombre,
     'imagen' => $ev_imagen,
     'modalidad' => $ev_modalidad,
+    'tipo_evento_presencial' => $ev_tipo_pres,
     'fecha_limite' => $ev_fecha_limite,
     'whatsapp_numero' => $ev_wa,
     'firma_imagen' => $ev_firma,
@@ -49,6 +50,12 @@ if (!$evento) {
 }
 
 $mod = norm_modalidad($evento['modalidad'] ?? '');
+
+// ✅ Label seguro para presencial: Congreso o Seminario (default: Congreso)
+$label_presencial = trim((string) ($evento['tipo_evento_presencial'] ?? ''));
+if ($label_presencial !== 'Congreso' && $label_presencial !== 'Seminario') {
+  $label_presencial = 'Congreso';
+}
 
 // Fechas/horario del evento (con tipo)
 $fechas_presenciales = array();
@@ -598,6 +605,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       'evento_id' => (int) $evento['id'],
       'nombre_evento' => $evento['nombre'],
       'modalidad' => $evento['modalidad'],
+      'tipo_evento_presencial' => $label_presencial, // ✅ NUEVO (útil para correos si luego lo quieres)
       'autoestudio' => (int) ($evento['autoestudio'] ?? 0),
       'fecha_limite' => $evento['fecha_limite'],
       'resumen_fechas' => $resumen_fechas,
@@ -618,7 +626,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       'modulos_fechas' => $modulos_csv,
       'whatsapp_consent' => $whatsapp_consent,
 
-      // flags para que en el siguiente paso el correo sea 100% preciso
       'incluye_presencial' => $incluye_presencial ? 'SI' : 'NO',
       'incluye_virtual' => $incluye_virtual ? 'SI' : 'NO'
     );
@@ -682,6 +689,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         'evento_id' => $eid,
         'nombre_evento' => $evento['nombre'],
         'modalidad' => $evento['modalidad'],
+        'tipo_evento_presencial' => $label_presencial, // ✅ NUEVO
         'resumen_fechas' => $resumen_fechas,
         'tipo_inscripcion' => $tipo_inscripcion,
         'inscrito_nombre' => $nombre,
@@ -695,7 +703,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         'medio' => $medio,
         'soporte_pago' => $soporte_rel,
 
-        // nuevo: selección exacta (para correo comercial, siguiente paso lo mostramos bonito)
         'asistencia_tipo' => $asistencia_tipo,
         'modulos_seleccionados' => $modulos_csv,
         'modulos_texto' => $modulos_human,
@@ -776,7 +783,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <?php if ($mod === 'curso_especial'): ?>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div class="p-4 border border-gray-300 rounded-xl bg-white">
-              <div class="font-bold text-[#942934] mb-2">📍 Congreso / Presencial</div>
+              <div class="font-bold text-[#942934] mb-2">📍
+                <?php echo htmlspecialchars($label_presencial, ENT_QUOTES, 'UTF-8'); ?> / Presencial</div>
               <?php echo pintarFechasHtml($fechas_presenciales); ?>
             </div>
             <div class="p-4 border border-gray-300 rounded-xl bg-white">
@@ -881,8 +889,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                   class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
                   <input type="radio" name="curso_especial_opcion" value="CONGRESO" class="accent-[#942934]" checked>
                   <div>
-                    <div class="font-semibold">Opción 1: Congreso (Presencial)</div>
-                    <div class="text-sm text-gray-600">Asiste únicamente al congreso presencial.</div>
+                    <div class="font-semibold">Opción 1:
+                      <?php echo htmlspecialchars($label_presencial, ENT_QUOTES, 'UTF-8'); ?> (Presencial)</div>
+                    <div class="text-sm text-gray-600">Asiste únicamente al evento presencial.</div>
                   </div>
                 </label>
 
@@ -908,7 +917,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                   class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
                   <input type="radio" name="curso_especial_opcion" value="CONGRESO_MAS_MODULOS" class="accent-[#942934]">
                   <div>
-                    <div class="font-semibold">Opción 4: Congreso + módulos</div>
+                    <div class="font-semibold">Opción 4:
+                      <?php echo htmlspecialchars($label_presencial, ENT_QUOTES, 'UTF-8'); ?> + módulos</div>
                     <div class="text-sm text-gray-600">Presencial + seleccione uno o más módulos virtuales.</div>
                   </div>
                 </label>

@@ -93,6 +93,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
   $modLow = strtolower(trim($modalidad));
 
+  // ✅ NUEVO: Tipo evento presencial (Congreso/Seminario) - solo si modalidad tiene presencial
+  $tipo_evento_presencial = null;
+  if ($modLow === 'presencial' || $modLow === 'hibrida' || $modLow === 'curso_especial') {
+    $tmpTipo = trim($_POST['tipo_evento_presencial'] ?? '');
+    if ($tmpTipo === 'Congreso' || $tmpTipo === 'Seminario') {
+      $tipo_evento_presencial = $tmpTipo;
+    } else {
+      $tipo_evento_presencial = null;
+    }
+  }
+
   // Lugar personalizado: aplica a modalidades que tienen bloque presencial
   $cambiar_lugar = isset($_POST['cambiar_lugar']) ? strtoupper(trim($_POST['cambiar_lugar'])) : 'NO';
   $lugar_personalizado = null;
@@ -113,9 +124,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     move_uploaded_file($_FILES['imagen']['tmp_name'], $uploadsDir . $nombreImagen);
   }
 
-  // INSERT evento
-  $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, lugar_personalizado, fecha_limite, comercial_user_id, autoestudio) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-  $stmt->bind_param("ssssssii", $nombre, $slug, $nombreImagen, $modalidad, $lugar_personalizado, $fecha_limite, $comercial_id, $autoestudio);
+  // ✅ INSERT evento (incluye tipo_evento_presencial)
+  $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, tipo_evento_presencial, lugar_personalizado, fecha_limite, comercial_user_id, autoestudio) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+  $stmt->bind_param("sssssssii", $nombre, $slug, $nombreImagen, $modalidad, $tipo_evento_presencial, $lugar_personalizado, $fecha_limite, $comercial_id, $autoestudio);
 
   if ($stmt->execute()) {
     $evento_id = $stmt->insert_id;
@@ -425,6 +436,17 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           </select>
         </div>
 
+        <!-- ✅ NUEVO: Tipo evento presencial (Congreso / Seminario) -->
+        <div id="wrap_tipo_evento_presencial" class="mt-3 p-4 border border-gray-200 rounded-xl hidden">
+          <label class="font-semibold text-gray-700 block mb-2">Tipo de evento presencial:</label>
+          <select id="tipo_evento_presencial" name="tipo_evento_presencial"
+            class="w-full p-3 border border-gray-300 rounded-xl">
+            <option value="">Selecciona...</option>
+            <option value="Congreso">Congreso</option>
+            <option value="Seminario">Seminario</option>
+          </select>
+        </div>
+
         <!-- Curso Especial: módulos virtuales (máx 10) -->
         <div id="curso_especial_wrap" class="mt-4 p-4 border border-gray-200 rounded-xl hidden">
           <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -526,6 +548,22 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         // Curso Especial: permite adjuntar ambos
         if (vWrap) vWrap.style.display = (vNorm === 'virtual' || vNorm === 'hibrida' || vNorm === 'curso_especial') ? 'block' : 'none';
         if (pWrap) pWrap.style.display = (vNorm === 'presencial' || vNorm === 'hibrida' || vNorm === 'curso_especial') ? 'block' : 'none';
+
+        // ✅ NUEVO: Tipo evento presencial (solo si hay presencial)
+        var teWrap = document.getElementById('wrap_tipo_evento_presencial');
+        var teSel = document.getElementById('tipo_evento_presencial');
+        if (teWrap && teSel) {
+          var showTE = (vNorm === 'presencial' || vNorm === 'hibrida' || vNorm === 'curso_especial');
+          if (showTE) {
+            teWrap.classList.remove('hidden');
+            // requerido SOLO cuando aplica
+            teSel.required = true;
+          } else {
+            teWrap.classList.add('hidden');
+            teSel.required = false;
+            teSel.value = '';
+          }
+        }
 
         // wrappers días
         var wrapNormal = document.getElementById('wrap_num_dias_normal');
@@ -860,12 +898,10 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
 
         btn.addEventListener('click', function () {
           addModuloRow();
-          // por si el usuario está en iframe / o cambia altura
           if (typeof window.__renderDias === 'function') window.__renderDias();
         });
       }
 
-      // ✅ Exponer bindCE para que se pueda llamar cuando se muestre Curso Especial
       window.__bindCE = bindCE;
 
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindCE);
