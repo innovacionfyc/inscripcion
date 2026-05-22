@@ -249,11 +249,15 @@ class CorreoDenuncia
         // etiqueta bonita de la selección
         $line1 = '';
         if ($modalidadLow === 'curso_especial') {
+            $tipoPresLabel = trim((string) ($data['tipo_evento_presencial'] ?? 'Congreso'));
+            if ($tipoPresLabel !== 'Congreso' && $tipoPresLabel !== 'Seminario') {
+                $tipoPresLabel = 'Congreso';
+            }
             $map = [
-                'CONGRESO' => 'Opción 1: Congreso (Presencial)',
+                'CONGRESO' => 'Opción 1: ' . $tipoPresLabel . ' (Presencial)',
                 'CURSO_COMPLETO' => 'Opción 2: Curso completo (Presencial + todos los módulos virtuales)',
                 'MODULOS_VIRTUALES' => 'Opción 3: Módulos virtuales (sin presencial)',
-                'CONGRESO_MAS_MODULOS' => 'Opción 4: Congreso (Presencial) + módulos virtuales',
+                'CONGRESO_MAS_MODULOS' => 'Opción 4: ' . $tipoPresLabel . ' (Presencial) + módulos virtuales',
             ];
             $line1 = $map[$asistencia_tipo] ?? ('Selección: ' . $this->h($asistencia_tipo));
         } else {
@@ -804,11 +808,15 @@ class CorreoDenuncia
             $incluyeP = (strtoupper((string) ($data['incluye_presencial'] ?? 'NO')) === 'SI');
             $incluyeV = (strtoupper((string) ($data['incluye_virtual'] ?? 'NO')) === 'SI');
 
+            $tipoPresLabel = trim((string) ($data['tipo_evento_presencial'] ?? 'Congreso'));
+            if ($tipoPresLabel !== 'Congreso' && $tipoPresLabel !== 'Seminario') {
+                $tipoPresLabel = 'Congreso';
+            }
             $mapCE = [
-                'CONGRESO' => 'Opción 1: Congreso (Presencial)',
+                'CONGRESO' => 'Opción 1: ' . $tipoPresLabel . ' (Presencial)',
                 'CURSO_COMPLETO' => 'Opción 2: Curso completo (Presencial + todos los módulos virtuales)',
                 'MODULOS_VIRTUALES' => 'Opción 3: Módulos virtuales (sin presencial)',
-                'CONGRESO_MAS_MODULOS' => 'Opción 4: Congreso (Presencial) + módulos virtuales',
+                'CONGRESO_MAS_MODULOS' => 'Opción 4: ' . $tipoPresLabel . ' (Presencial) + módulos virtuales',
             ];
             $selNice = isset($mapCE[$asist]) ? $mapCE[$asist] : ($asist ?: 'COMPLETO');
 
