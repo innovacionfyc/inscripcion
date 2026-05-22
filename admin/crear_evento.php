@@ -113,6 +113,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $lugar_personalizado = null;
   }
 
+  // URL de conexión al evento (opcional)
+  $url_conexion = null;
+  $raw_url = trim($_POST['url_conexion'] ?? '');
+  if ($raw_url !== '') {
+    if (!filter_var($raw_url, FILTER_VALIDATE_URL)) {
+      $error = 'La URL de conexión al evento no es válida.';
+    } else {
+      $url_conexion = $raw_url;
+    }
+  }
+
   // Upload imagen principal del evento
   $nombreImagen = '';
   if (!empty($_FILES['imagen']['name']) && $_FILES['imagen']['error'] === 0) {
@@ -124,9 +135,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     move_uploaded_file($_FILES['imagen']['tmp_name'], $uploadsDir . $nombreImagen);
   }
 
-  // ✅ INSERT evento (incluye tipo_evento_presencial)
-  $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, tipo_evento_presencial, lugar_personalizado, fecha_limite, comercial_user_id, autoestudio) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-  $stmt->bind_param("sssssssii", $nombre, $slug, $nombreImagen, $modalidad, $tipo_evento_presencial, $lugar_personalizado, $fecha_limite, $comercial_id, $autoestudio);
+  if (empty($error)) {
+  // ✅ INSERT evento
+  $stmt = $conn->prepare("INSERT INTO eventos (nombre, slug, imagen, modalidad, tipo_evento_presencial, lugar_personalizado, url_conexion, fecha_limite, comercial_user_id, autoestudio) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+  $stmt->bind_param("ssssssssii", $nombre, $slug, $nombreImagen, $modalidad, $tipo_evento_presencial, $lugar_personalizado, $url_conexion, $fecha_limite, $comercial_id, $autoestudio);
 
   if ($stmt->execute()) {
     $evento_id = $stmt->insert_id;
@@ -297,6 +309,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $stmt->close();
     $conn->close();
   }
+  } // fin if (empty($error))
 }
 
 $slugValue = $_GET['slug'] ?? '';
@@ -495,6 +508,15 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           <small class="text-gray-500">Formatos: pdf, doc(x), xls(x), ppt(x), jpg, png, webp. Máx 25MB c/u.</small>
         </div>
 
+        <!-- URL de conexión al evento (opcional, aplica a virtual/híbrida/curso especial) -->
+        <div id="wrap_url_conexion" style="display:none; margin-top:12px;">
+          <label class="block font-semibold mb-1">URL de conexión al evento</label>
+          <input type="url" name="url_conexion" id="url_conexion"
+            class="w-full p-3 border border-gray-300 rounded-xl"
+            placeholder="https://...">
+          <small class="text-gray-500">Opcional. Si se diligencia, se enviará al inscrito en el correo de confirmación.</small>
+        </div>
+
         <div class="mt-4 p-4 border border-gray-200 rounded-xl">
           <div class="font-semibold text-gray-700 mb-2">Autoestudio y trabajo integrador</div>
 
@@ -548,6 +570,9 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         // Curso Especial: permite adjuntar ambos
         if (vWrap) vWrap.style.display = (vNorm === 'virtual' || vNorm === 'hibrida' || vNorm === 'curso_especial') ? 'block' : 'none';
         if (pWrap) pWrap.style.display = (vNorm === 'presencial' || vNorm === 'hibrida' || vNorm === 'curso_especial') ? 'block' : 'none';
+
+        var urlWrap = document.getElementById('wrap_url_conexion');
+        if (urlWrap) urlWrap.style.display = (vNorm === 'virtual' || vNorm === 'hibrida' || vNorm === 'curso_especial') ? 'block' : 'none';
 
         // ✅ NUEVO: Tipo evento presencial (solo si hay presencial)
         var teWrap = document.getElementById('wrap_tipo_evento_presencial');
