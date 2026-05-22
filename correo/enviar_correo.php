@@ -496,6 +496,7 @@ class CorreoDenuncia
             $fechaLimite = isset($data['fecha_limite']) ? (string) $data['fecha_limite'] : '';
 
             $modalidadLowNorm = $this->normModalidad($data['modalidad'] ?? '');
+            $is_phv_mail = ($modalidadLowNorm === 'públicamente_hablando_(virtual)');
 
             // Bloques especiales de agenda (Curso Especial)
             $agendaHtml = "";
@@ -566,8 +567,8 @@ class CorreoDenuncia
                 }
             }
 
-            // Bloque selección (lo que eligió)
-            $seleccionHtml = $this->buildResumenSeleccionHtml($data);
+            // Bloque selección (lo que eligió) — vacío para PHV (evento gratuito, sin selección de asistencia)
+            $seleccionHtml = $is_phv_mail ? '' : $this->buildResumenSeleccionHtml($data);
 
             // Lugar (solo si aplica presencial)
             $lugarHtml = !empty($data['lugar'])
@@ -630,6 +631,19 @@ class CorreoDenuncia
                     . ($encargadoNombre ? '<div style="font-weight:800;margin-bottom:6px;color:#111827;">' . $this->h($encargadoNombre) . '</div>' : '')
                     . $firmaImgTag
                     . '</div>';
+            }
+
+            // "Tenga en cuenta" block — omitido para PHV (no hay soporte de pago)
+            $tenganEnCuentaHtml = '';
+            if (!$is_phv_mail) {
+                $tenganEnCuentaHtml = "<div style='margin:10px 0 0;'>
+                    <div style='font-weight:800; margin-bottom:6px;'>Tenga en cuenta</div>
+                    <ul style='margin:8px 0 0; padding-left:18px; color:#111827'>
+                      <li>Para garantizar su reserva, por favor envíe con anticipación el soporte de pago o autorización correspondiente.</li>"
+                    . (!empty($fechaLimiteTxt) ? "<li>Confirma tu asistencia antes del <strong>{$fechaLimiteTxt}</strong>.</li>" : "")
+                    . "<li>Un día antes del evento recibirás el cronograma detallado.</li>
+                    </ul>
+                  </div>";
             }
 
             // Subject
@@ -700,14 +714,7 @@ class CorreoDenuncia
 
                   {$urlConexionHtml}
 
-                  <div style='margin:10px 0 0;'>
-                    <div style='font-weight:800; margin-bottom:6px;'>🔹 Tenga en cuenta</div>
-                    <ul style='margin:8px 0 0; padding-left:18px; color:#111827'>
-                      <li>Para garantizar su reserva, por favor envíe con anticipación el soporte de pago o autorización correspondiente.</li>
-                      " . (!empty($fechaLimiteTxt) ? "<li>Confirma tu asistencia antes del <strong>{$fechaLimiteTxt}</strong>.</li>" : "") . "
-                      <li>Un día antes del evento recibirás el cronograma detallado.</li>
-                    </ul>
-                  </div>
+                  {$tenganEnCuentaHtml}
 
                   {$btnWhatsapp}
 
@@ -740,7 +747,8 @@ class CorreoDenuncia
             $altMods = $data['modulos_texto'] ?? '';
             $altAuto = (!empty($data['autoestudio']) && (int) $data['autoestudio'] === 1) ? " Incluye Autoestudio." : "";
             $altUrl = !empty($data['url_conexion']) ? " Enlace de acceso: " . (string) $data['url_conexion'] . "." : "";
-            $mail->AltBody = "Inscripción confirmada a {$altNombreEvento} ({$altModalidad}). Fechas: {$altResumen}. Selección: {$altSel}. Módulos: {$altMods}." . $altAuto . $altUrl;
+            $altSelPart = $is_phv_mail ? '' : " Selección: {$altSel}. Módulos: {$altMods}.";
+            $mail->AltBody = "Inscripción confirmada a {$altNombreEvento} ({$altModalidad}). Fechas: {$altResumen}.{$altSelPart}" . $altAuto . $altUrl;
 
             return $mail->send();
         } catch (Exception $e) {

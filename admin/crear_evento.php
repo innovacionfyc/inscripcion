@@ -191,7 +191,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       if ($modLow === 'curso_especial') {
         $tipoNormal = 'presencial';
       } else {
-        $tipoNormal = ($modLow === 'presencial') ? 'presencial' : (($modLow === 'virtual') ? 'virtual' : 'general');
+        $tipoNormal = ($modLow === 'presencial') ? 'presencial' : (($modLow === 'virtual' || $modLow === 'públicamente hablando (virtual)') ? 'virtual' : 'general');
       }
 
       for ($i = 0; $i < count($fechas); $i++) {
@@ -446,6 +446,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
             <option value="Virtual">Virtual</option>
             <option value="Hibrida">Híbrida</option>
             <option value="Curso_Especial">Curso Especial</option>
+            <option value="Públicamente Hablando (Virtual)">Públicamente Hablando (Virtual)</option>
           </select>
         </div>
 
@@ -563,16 +564,17 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
 
         // ✅ NORMALIZACIÓN (para soportar "Curso Especial" y "Curso_Especial")
         var vNorm = (v || '').toLowerCase().replace(/\s+/g, '_');
+        var isPHV = (vNorm === 'públicamente_hablando_(virtual)');
 
         var vWrap = document.getElementById('docs_virtual_wrap');
         var pWrap = document.getElementById('docs_presencial_wrap');
 
         // Curso Especial: permite adjuntar ambos
-        if (vWrap) vWrap.style.display = (vNorm === 'virtual' || vNorm === 'hibrida' || vNorm === 'curso_especial') ? 'block' : 'none';
+        if (vWrap) vWrap.style.display = (vNorm === 'virtual' || vNorm === 'hibrida' || vNorm === 'curso_especial' || isPHV) ? 'block' : 'none';
         if (pWrap) pWrap.style.display = (vNorm === 'presencial' || vNorm === 'hibrida' || vNorm === 'curso_especial') ? 'block' : 'none';
 
         var urlWrap = document.getElementById('wrap_url_conexion');
-        if (urlWrap) urlWrap.style.display = (vNorm === 'virtual' || vNorm === 'hibrida' || vNorm === 'curso_especial') ? 'block' : 'none';
+        if (urlWrap) urlWrap.style.display = (vNorm === 'virtual' || vNorm === 'hibrida' || vNorm === 'curso_especial' || isPHV) ? 'block' : 'none';
 
         // ✅ NUEVO: Tipo evento presencial (solo si hay presencial)
         var teWrap = document.getElementById('wrap_tipo_evento_presencial');
