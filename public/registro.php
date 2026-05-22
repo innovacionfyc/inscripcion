@@ -22,10 +22,10 @@ function norm_modalidad($m)
 
 $evento = null;
 
-$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, tipo_evento_presencial, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre, lugar_personalizado, autoestudio FROM eventos WHERE slug = ? LIMIT 1');
+$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, tipo_evento_presencial, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre, lugar_personalizado, url_conexion, autoestudio FROM eventos WHERE slug = ? LIMIT 1');
 $stmt->bind_param('s', $slug);
 $stmt->execute();
-$stmt->bind_result($ev_id, $ev_nombre, $ev_imagen, $ev_modalidad, $ev_tipo_pres, $ev_fecha_limite, $ev_wa, $ev_firma, $ev_encargado, $ev_lugar, $ev_autoestudio);
+$stmt->bind_result($ev_id, $ev_nombre, $ev_imagen, $ev_modalidad, $ev_tipo_pres, $ev_fecha_limite, $ev_wa, $ev_firma, $ev_encargado, $ev_lugar, $ev_url_conexion, $ev_autoestudio);
 if ($stmt->fetch()) {
   $evento = array(
     'id' => $ev_id,
@@ -38,6 +38,7 @@ if ($stmt->fetch()) {
     'firma_imagen' => $ev_firma,
     'encargado_nombre' => $ev_encargado,
     'lugar_personalizado' => $ev_lugar,
+    'url_conexion' => $ev_url_conexion,
     'autoestudio' => (int) $ev_autoestudio
   );
 }
@@ -627,7 +628,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       'whatsapp_consent' => $whatsapp_consent,
 
       'incluye_presencial' => $incluye_presencial ? 'SI' : 'NO',
-      'incluye_virtual' => $incluye_virtual ? 'SI' : 'NO'
+      'incluye_virtual' => $incluye_virtual ? 'SI' : 'NO',
+      'url_conexion' => $evento['url_conexion'] ?? ''
     );
 
     $MAIL_DEBUG = false;
@@ -707,7 +709,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         'modulos_seleccionados' => $modulos_csv,
         'modulos_texto' => $modulos_human,
         'incluye_presencial' => $incluye_presencial ? 'SI' : 'NO',
-        'incluye_virtual' => $incluye_virtual ? 'SI' : 'NO'
+        'incluye_virtual' => $incluye_virtual ? 'SI' : 'NO',
+        'url_conexion' => $evento['url_conexion'] ?? ''
       );
 
       $okAviso = $correo->sendAvisoNuevaInscripcion($com_email, $aviso);

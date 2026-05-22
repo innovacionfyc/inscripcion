@@ -650,6 +650,19 @@ class CorreoDenuncia
                    </div>"
                 : "";
 
+            // Bloque URL de conexión al evento (opcional)
+            $urlConexionHtml = '';
+            if (!empty($data['url_conexion'])) {
+                $urlEsc = htmlspecialchars((string) $data['url_conexion'], ENT_QUOTES, 'UTF-8');
+                $urlConexionHtml = "<div style='margin:14px 0; padding:14px; background:#fef2f2; border:1px solid #fecaca; border-radius:12px; text-align:center;'>"
+                    . "<p style='margin:0 0 10px; font-size:14px; color:#111827;'>Este evento cuenta con enlace de acceso. Puede ingresar desde el siguiente bot&oacute;n:</p>"
+                    . "<a href='" . $urlEsc . "' target='_blank' rel='noopener noreferrer'"
+                    . " style='display:inline-block;background:#942934;color:#ffffff;padding:12px 24px;border-radius:12px;text-decoration:none;font-weight:800;font-size:15px;'>"
+                    . "Acceder al evento aqu&iacute;"
+                    . "</a>"
+                    . "</div>";
+            }
+
             // Cuerpo principal (limpio y entendible)
             $html = "
             <div style='font-family:Arial, Helvetica, sans-serif;background:#f6f7fb;padding:24px'>
@@ -684,6 +697,8 @@ class CorreoDenuncia
                   {$agendaHtml}
 
                   " . ($lugarHtml ? $this->buildBox('📍 Información del lugar', $lugarHtml) : "") . "
+
+                  {$urlConexionHtml}
 
                   <div style='margin:10px 0 0;'>
                     <div style='font-weight:800; margin-bottom:6px;'>🔹 Tenga en cuenta</div>
@@ -724,7 +739,8 @@ class CorreoDenuncia
             $altSel = $data['asistencia_tipo'] ?? '';
             $altMods = $data['modulos_texto'] ?? '';
             $altAuto = (!empty($data['autoestudio']) && (int) $data['autoestudio'] === 1) ? " Incluye Autoestudio." : "";
-            $mail->AltBody = "Inscripción confirmada a {$altNombreEvento} ({$altModalidad}). Fechas: {$altResumen}. Selección: {$altSel}. Módulos: {$altMods}." . $altAuto;
+            $altUrl = !empty($data['url_conexion']) ? " Enlace de acceso: " . (string) $data['url_conexion'] . "." : "";
+            $mail->AltBody = "Inscripción confirmada a {$altNombreEvento} ({$altModalidad}). Fechas: {$altResumen}. Selección: {$altSel}. Módulos: {$altMods}." . $altAuto . $altUrl;
 
             return $mail->send();
         } catch (Exception $e) {
@@ -846,6 +862,7 @@ class CorreoDenuncia
                     <div><strong>Evento:</strong> {$ev}</div>
                     <div><strong>Modalidad:</strong> {$mod}</div>
                     " . (!empty($sum) ? "<div><strong>Fechas:</strong> " . $this->h($sum) . "</div>" : "") . "
+                    " . (!empty($data['url_conexion']) ? "<div><strong>URL de conexi&oacute;n:</strong> <a href='" . $this->h($data['url_conexion']) . "' target='_blank'>" . $this->h($data['url_conexion']) . "</a></div>" : "") . "
                   </div>
 
                   <div style='margin:14px 0; padding:14px; background:#fafafa; border:1px solid #eee; border-radius:12px;'>
@@ -888,7 +905,8 @@ class CorreoDenuncia
                 (isset($data['inscrito_nombre']) ? $data['inscrito_nombre'] : '') . " - " .
                 (isset($data['email_corporativo']) ? $data['email_corporativo'] : '') .
                 ". Selección: {$selNice}. Módulos: {$modsTxt}." .
-                ($hayAdjunto ? ' (se adjunta soporte)' : ' (sin soporte)');
+                ($hayAdjunto ? ' (se adjunta soporte)' : ' (sin soporte)') .
+                (!empty($data['url_conexion']) ? " URL: " . (string) $data['url_conexion'] . "." : "");
 
             return $mail->send();
         } catch (Exception $e) {
