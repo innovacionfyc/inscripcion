@@ -51,6 +51,7 @@ if (!$evento) {
 }
 
 $mod = norm_modalidad($evento['modalidad'] ?? '');
+$is_phv = ($mod === 'públicamente_hablando_(virtual)');
 
 // ✅ Label seguro para presencial: Congreso o Seminario (default: Congreso)
 $label_presencial = trim((string) ($evento['tipo_evento_presencial'] ?? ''));
@@ -129,6 +130,8 @@ if ($mod === 'hibrida') {
   $fechas = $fechas_presenciales;
 } elseif ($mod === 'curso_especial') {
   $fechas = $fechas_presenciales;
+} elseif ($is_phv) {
+  $fechas = $fechas_virtuales;
 } else {
   $fechas = $fechas_generales;
 }
@@ -524,7 +527,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $incluye_virtual = true;
     } else {
       $incluye_presencial = ($mod_form === 'presencial' || $mod_form === 'hibrida');
-      $incluye_virtual = ($mod_form === 'virtual' || $mod_form === 'hibrida');
+      $incluye_virtual = ($mod_form === 'virtual' || $mod_form === 'hibrida' || $mod_form === 'públicamente_hablando_(virtual)');
     }
 
     // PDF guía hotelera (solo cuando realmente aplica presencial por defecto)
@@ -956,9 +959,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             </div>
           <?php endif; ?>
 
+          <?php if (!$is_phv): ?>
           <input type="file" name="soporte_pago" accept=".pdf,image/*"
             class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
           <p class="text-sm text-black-500 -mt-2">Soporte de Asistencia Opcional (PDF o imagen - máx. 10 MB).</p>
+          <?php endif; ?>
 
           <div class="p-4 border border-gray-300 rounded-xl">
             <div class="font-semibold text-gray-800 mb-2">
