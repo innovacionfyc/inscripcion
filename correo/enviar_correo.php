@@ -259,7 +259,7 @@ class CorreoDenuncia
                 'MODULOS_VIRTUALES' => 'Opción 3: Módulos virtuales (sin presencial)',
                 'CONGRESO_MAS_MODULOS' => 'Opción 4: ' . $tipoPresLabel . ' (Presencial) + módulos virtuales',
                 'CONG_VIRTUAL' => 'Opción 5: Congreso virtual',
-                'CONG_VIRT_MODS' => 'Opción 6: Congreso virtual + todos los módulos virtuales',
+                'CONG_VIRT_MODS' => 'Opción 6: Curso completo virtual',
             ];
             $line1 = $map[$asistencia_tipo] ?? ('Selección: ' . $this->h($asistencia_tipo));
         } else {
@@ -844,7 +844,7 @@ class CorreoDenuncia
                 'MODULOS_VIRTUALES' => 'Opción 3: Módulos virtuales (sin presencial)',
                 'CONGRESO_MAS_MODULOS' => 'Opción 4: ' . $tipoPresLabel . ' (Presencial) + módulos virtuales',
                 'CONG_VIRTUAL' => 'Opción 5: Congreso virtual',
-                'CONG_VIRT_MODS' => 'Opción 6: Congreso virtual + todos los módulos virtuales',
+                'CONG_VIRT_MODS' => 'Opción 6: Curso completo virtual',
             ];
             $selNice = isset($mapCE[$asist]) ? $mapCE[$asist] : ($asist ?: 'COMPLETO');
 

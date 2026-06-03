@@ -914,7 +914,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
 
                 <?php if ($ce_tiene_presencial): ?>
-                  <!-- Opciones CE con presencial: 1, 2, 4 -->
+                  <!-- Opciones CE con presencial: 1, 2 -->
                   <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
                     <input type="radio" name="curso_especial_opcion" value="CONGRESO"
                       class="accent-[#942934]" <?php echo (!$ce_tiene_virtual) ? 'checked' : ''; ?>>
@@ -931,14 +931,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                       <div class="text-sm text-gray-600">Presencial + todos los módulos virtuales.</div>
                     </div>
                   </label>
-
-                  <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
-                    <input type="radio" name="curso_especial_opcion" value="CONGRESO_MAS_MODULOS" class="accent-[#942934]">
-                    <div>
-                      <div class="font-semibold">Opción 4: <?php echo htmlspecialchars($label_presencial, ENT_QUOTES, 'UTF-8'); ?> + módulos</div>
-                      <div class="text-sm text-gray-600">Presencial + seleccione uno o más módulos virtuales.</div>
-                    </div>
-                  </label>
                 <?php endif; ?>
 
                 <!-- Opción 3: Módulos virtuales (siempre si hay módulos) -->
@@ -948,6 +940,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     <div>
                       <div class="font-semibold">Opción 3: Módulos virtuales</div>
                       <div class="text-sm text-gray-600">Seleccione uno o más módulos (sin congreso).</div>
+                    </div>
+                  </label>
+                <?php endif; ?>
+
+                <?php if ($ce_tiene_presencial): ?>
+                  <!-- Opción 4: Congreso + módulos -->
+                  <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="curso_especial_opcion" value="CONGRESO_MAS_MODULOS" class="accent-[#942934]">
+                    <div>
+                      <div class="font-semibold">Opción 4: <?php echo htmlspecialchars($label_presencial, ENT_QUOTES, 'UTF-8'); ?> + módulos</div>
+                      <div class="text-sm text-gray-600">Presencial + seleccione uno o más módulos virtuales.</div>
                     </div>
                   </label>
                 <?php endif; ?>
@@ -966,7 +969,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                   <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
                     <input type="radio" name="curso_especial_opcion" value="CONG_VIRT_MODS" class="accent-[#942934]">
                     <div>
-                      <div class="font-semibold">Opción 6: Congreso virtual + todos los módulos</div>
+                      <div class="font-semibold">Opción 6: Curso completo virtual</div>
                       <div class="text-sm text-gray-600">Congreso virtual + todos los módulos virtuales.</div>
                     </div>
                   </label>
