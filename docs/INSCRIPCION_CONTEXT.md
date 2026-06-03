@@ -1,7 +1,7 @@
 # Contexto del Proyecto: Inscripción a Eventos F&C Consultores
 
 > **Documento de contexto técnico** para trabajo coordinado entre Claude / ChatGPT y el equipo de desarrollo.
-> Actualizado: 2026-05-22. Solo lectura / análisis. No ejecutar ni modificar desde este archivo.
+> Actualizado: 2026-06-03. Solo lectura / análisis. No ejecutar ni modificar desde este archivo.
 
 ---
 
@@ -218,6 +218,15 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 - Opción de inscripción: COMPLETO o MODULOS (selección por fechas individuales)
 - No muestra lugar
 
+### `Públicamente Hablando (Virtual)` *(normalizado como `públicamente_hablando_(virtual)`)*
+- Modalidad gratuita — sin soporte de pago, sin bloque "Tenga en cuenta"
+- Fechas con tipo `virtual` en `eventos_fechas`
+- El formulario de registro oculta el campo de soporte de pago
+- El correo de confirmación omite la sección de selección y el bloque de instrucciones de pago
+- Admite URL de conexión opcional (`url_conexion`)
+- Comparado en código con `$is_phv` / `$is_phv_mail` luego de pasar por `norm_modalidad()`
+- Valor guardado en BD tal cual: `"Públicamente Hablando (Virtual)"`
+
 ### `hibrida`
 - Fechas divididas: presenciales + virtuales en `eventos_fechas`
 - Muestra bloque de ambas fechas en el formulario
@@ -248,9 +257,10 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 | nombre | VARCHAR | Nombre del evento |
 | slug | VARCHAR UNIQUE | Identificador URL (generado desde nombre) |
 | imagen | VARCHAR | Nombre de archivo en `uploads/eventos/` |
-| modalidad | VARCHAR | presencial, Virtual, virtual, Hibrida, Curso_Especial (case mixto posible) |
-| tipo_evento_presencial | VARCHAR NULL | "Congreso" o "Seminario" (nuevo campo) |
+| modalidad | VARCHAR(50) | Valores en BD: "Presencial", "Virtual", "Hibrida", "Curso_Especial", "Públicamente Hablando (Virtual)". Case mixto — siempre normalizar con `norm_modalidad()` en PHP |
+| tipo_evento_presencial | **ENUM('Congreso','Seminario')** NULL | Solo aplica a modalidades con bloque presencial |
 | lugar_personalizado | TEXT NULL | Lugar alternativo al por defecto |
+| url_conexion | VARCHAR(500) NULL | URL opcional de acceso al evento. Si se diligencia, se muestra como botón en el correo al inscrito |
 | fecha_limite | DATE | Fecha límite para confirmar asistencia |
 | comercial_user_id | INT FK → usuarios | Comercial responsable del evento |
 | autoestudio | TINYINT | 0/1 — si incluye material de autoestudio |
@@ -300,8 +310,9 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 | soporte_pago | VARCHAR NULL | Ruta relativa en `uploads/soportes/` |
 | asistencia_tipo | VARCHAR | COMPLETO, MODULOS, CONGRESO, CURSO_COMPLETO, MODULOS_VIRTUALES, CONGRESO_MAS_MODULOS |
 | modulos_seleccionados | VARCHAR NULL | CSV de IDs, "ALL", o vacío |
-| whatsapp_consent | VARCHAR NULL | "SI" o "NO" |
+| whatsapp_consent | **ENUM('SI','NO')** NULL | |
 | fecha_registro | DATETIME | Timestamp de registro |
+| estado_contacto | VARCHAR(30) NOT NULL DEFAULT `pendiente_confirmacion` | Estado de seguimiento gestionado desde `admin/inscritos.php`. Valores: `inscrito`, `no_asiste`, `pendiente_confirmacion`, `no_contesta` |
 
 ### `usuarios`
 | Campo | Tipo | Descripción |
@@ -311,7 +322,7 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 | usuario | VARCHAR UNIQUE | Username para login |
 | email | VARCHAR | |
 | password_hash | VARCHAR | Hash bcrypt (`password_hash`) |
-| rol | VARCHAR | "admin" o rol de comercial |
+| rol | **ENUM('admin','editor')** | Solo dos valores válidos en BD |
 | activo | TINYINT | 0/1 |
 | whatsapp | VARCHAR NULL | Número WhatsApp del comercial |
 | firma_path | VARCHAR NULL | Ruta a imagen de firma |
@@ -352,18 +363,33 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 
 ## 11. Cambios Recientes Detectados
 
-### Campo `tipo_evento_presencial` (último commit: `809ca78`)
-- **Qué es**: campo nuevo en `eventos` con valor "Congreso" o "Seminario"
+### Estado actual: `main` en `c1cf333` (2026-06-03)
+- Último merge: PR #2 — modalidad Públicamente Hablando (Virtual)
+- Anterior: PR #1 — URL de conexión opcional + tipo evento presencial
+
+### Campo `tipo_evento_presencial`
+- **Tipo real en BD**: `ENUM('Congreso','Seminario')` NULL (no VARCHAR)
 - **Dónde se guarda**: `crear_evento.php` → INSERT en `eventos`
-- **Dónde se usa**: `registro.php` → label dinámico ("Congreso / Presencial" o "Seminario / Presencial"), también pasa a los datos de correo como `tipo_evento_presencial`
-- **Validación**: si el valor no es exactamente "Congreso" o "Seminario", se usa "Congreso" como fallback
+- **Dónde se usa**: `registro.php` → label dinámico ("Congreso / Presencial" o "Seminario / Presencial"), también pasa a los datos de correo
+- **Validación PHP**: si el valor no es exactamente "Congreso" o "Seminario", se usa "Congreso" como fallback
 - **Cuándo aplica**: modalidades `presencial`, `hibrida`, `curso_especial`
-- **En el formulario admin**: selector oculto que aparece dinámicamente al elegir modalidad con presencial
+
+### Campo `url_conexion`
+- `VARCHAR(500)` NULL en `eventos`, migración aplicada (`docs/sql/2026_05_22_add_url_conexion_eventos.sql`)
+- Si se configura, aparece como botón "Acceder al evento aquí" en el correo al inscrito
+- También se reporta en el correo al comercial
+- Aplica a: Virtual, Híbrida, Curso Especial, Públicamente Hablando (Virtual)
+
+### Modalidad Públicamente Hablando (Virtual)
+- Evento gratuito: sin soporte de pago, sin bloque de instrucciones de pago
+- Detectado con `$is_phv` / `$is_phv_mail` tras `norm_modalidad()`
+- Correo omite: bloque "Tenga en cuenta" y bloque de selección de asistencia
 
 ### Módulos virtuales en Curso Especial
 - Tabla `eventos_modulos_virtuales` con nombre/tema por módulo
 - El inscrito puede seleccionar módulos individuales (IDs) o todos (ALL)
 - El correo de confirmación muestra agenda detallada según la selección
+- `inscritos.asistencia_tipo VARCHAR(20)`: `CONGRESO_MAS_MODULOS` tiene exactamente 20 chars — en el límite
 
 ### Correos personalizados
 - `sendConfirmacionInscripcion` usa `incluye_presencial`/`incluye_virtual` para decidir adjuntos y secciones del correo

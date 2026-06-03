@@ -2,3 +2,23 @@ node_modules/
 vendor/
 .env
 /db/conexion.local.php
+
+# Archivos generados / sensibles — previene commits accidentales futuros
+# Nota: archivos ya trackeados antes de esta regla NO se eliminan del repo
+# Para desrastrear: git rm --cached <archivo> (solo cuando sea seguro hacerlo)
+
+# Soportes de pago subidos por inscritos (documentos personales)
+/uploads/soportes/
+
+# Firmas de comerciales
+/uploads/firmas/
+
+# HTMLs de correo en modo debug (pueden contener datos de inscritos)
+/storage/mail_debug/
+/storage/*.html
+
+# Imágenes de portada de eventos (archivos binarios generados en runtime)
+/uploads/eventos/*.png
+/uploads/eventos/*.jpg
+/uploads/eventos/*.jpeg
+/uploads/eventos/*.webp
