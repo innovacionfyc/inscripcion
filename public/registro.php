@@ -22,10 +22,10 @@ function norm_modalidad($m)
 
 $evento = null;
 
-$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, tipo_evento_presencial, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre, lugar_personalizado, url_conexion, autoestudio FROM eventos WHERE slug = ? LIMIT 1');
+$stmt = $conn->prepare('SELECT id, nombre, imagen, modalidad, tipo_evento_presencial, congreso_presencial, congreso_virtual, fecha_limite, whatsapp_numero, firma_imagen, encargado_nombre, lugar_personalizado, url_conexion, autoestudio FROM eventos WHERE slug = ? LIMIT 1');
 $stmt->bind_param('s', $slug);
 $stmt->execute();
-$stmt->bind_result($ev_id, $ev_nombre, $ev_imagen, $ev_modalidad, $ev_tipo_pres, $ev_fecha_limite, $ev_wa, $ev_firma, $ev_encargado, $ev_lugar, $ev_url_conexion, $ev_autoestudio);
+$stmt->bind_result($ev_id, $ev_nombre, $ev_imagen, $ev_modalidad, $ev_tipo_pres, $ev_congreso_presencial, $ev_congreso_virtual, $ev_fecha_limite, $ev_wa, $ev_firma, $ev_encargado, $ev_lugar, $ev_url_conexion, $ev_autoestudio);
 if ($stmt->fetch()) {
   $evento = array(
     'id' => $ev_id,
@@ -33,6 +33,8 @@ if ($stmt->fetch()) {
     'imagen' => $ev_imagen,
     'modalidad' => $ev_modalidad,
     'tipo_evento_presencial' => $ev_tipo_pres,
+    'congreso_presencial' => (int) $ev_congreso_presencial,
+    'congreso_virtual' => (int) $ev_congreso_virtual,
     'fecha_limite' => $ev_fecha_limite,
     'whatsapp_numero' => $ev_wa,
     'firma_imagen' => $ev_firma,
@@ -52,6 +54,8 @@ if (!$evento) {
 
 $mod = norm_modalidad($evento['modalidad'] ?? '');
 $is_phv = ($mod === 'públicamente_hablando_(virtual)');
+$ce_tiene_presencial = ($mod === 'curso_especial' && (int)($evento['congreso_presencial'] ?? 0) === 1);
+$ce_tiene_virtual    = ($mod === 'curso_especial' && (int)($evento['congreso_virtual'] ?? 0) === 1);
 
 // ✅ Label seguro para presencial: Congreso o Seminario (default: Congreso)
 $label_presencial = trim((string) ($evento['tipo_evento_presencial'] ?? ''));
@@ -129,7 +133,14 @@ if ($mod === 'hibrida') {
 } elseif ($mod === 'presencial') {
   $fechas = $fechas_presenciales;
 } elseif ($mod === 'curso_especial') {
-  $fechas = $fechas_presenciales;
+  // Usa fechas presenciales para resumen si existen, si no virtuales
+  if ($ce_tiene_presencial && !empty($fechas_presenciales)) {
+    $fechas = $fechas_presenciales;
+  } elseif ($ce_tiene_virtual && !empty($fechas_virtuales)) {
+    $fechas = $fechas_virtuales;
+  } else {
+    $fechas = $fechas_presenciales;
+  }
 } elseif ($is_phv) {
   $fechas = $fechas_virtuales;
 } else {
@@ -378,16 +389,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $asistencia_tipo = 'COMPLETO';
   $modulos_csv = '';
 
-  // Curso Especial: 4 casos
+  // Curso Especial: 6 opciones (4 presenciales + 2 virtuales)
   if ($mod_form === 'curso_especial') {
-    $sel = isset($_POST['curso_especial_opcion']) ? strtoupper(trim($_POST['curso_especial_opcion'])) : 'CONGRESO';
-    $permitidas = array('CONGRESO', 'CURSO_COMPLETO', 'MODULOS_VIRTUALES', 'CONGRESO_MAS_MODULOS');
+    $sel = isset($_POST['curso_especial_opcion']) ? strtoupper(trim($_POST['curso_especial_opcion'])) : '';
+    $permitidas = array('CONGRESO', 'CURSO_COMPLETO', 'MODULOS_VIRTUALES', 'CONGRESO_MAS_MODULOS', 'CONG_VIRTUAL', 'CONG_VIRT_MODS');
+    // Fallback: si CE tiene presencial, ir a CONGRESO; si solo virtual, CONG_VIRTUAL
+    $fallback_ce = ($ce_tiene_presencial) ? 'CONGRESO' : 'CONG_VIRTUAL';
     if (!in_array($sel, $permitidas, true))
-      $sel = 'CONGRESO';
+      $sel = $fallback_ce;
 
     $asistencia_tipo = $sel;
 
-    // Selección de módulos (por ID)
+    // Selección de módulos (por ID) — solo para opciones que requieren selección manual
     $mods_sel = isset($_POST['modulos_virtuales']) && is_array($_POST['modulos_virtuales']) ? $_POST['modulos_virtuales'] : array();
     $ids_validos = array();
     $mapMods = array();
@@ -401,20 +414,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
     $ids_validos = array_values(array_unique($ids_validos));
 
-    if ($sel === 'CURSO_COMPLETO') {
+    if ($sel === 'CURSO_COMPLETO' || $sel === 'CONG_VIRT_MODS') {
       $modulos_csv = 'ALL';
-    } elseif ($sel === 'CONGRESO') {
+    } elseif ($sel === 'CONGRESO' || $sel === 'CONG_VIRTUAL') {
       $modulos_csv = '';
     } else {
+      // MODULOS_VIRTUALES o CONGRESO_MAS_MODULOS: requieren selección manual
       if (empty($ids_validos)) {
-        // Si no seleccionó módulos cuando era obligatorio, lo degradamos a CONGRESO (seguro)
-        if ($sel === 'MODULOS_VIRTUALES') {
-          $asistencia_tipo = 'CONGRESO';
-          $modulos_csv = '';
-        } else {
-          $asistencia_tipo = 'CONGRESO';
-          $modulos_csv = '';
-        }
+        $asistencia_tipo = $fallback_ce;
+        $modulos_csv = '';
       } else {
         $modulos_csv = implode(',', $ids_validos);
       }
@@ -519,11 +527,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $incluye_virtual = false;
 
     if ($mod_form === 'curso_especial') {
-      if ($asistencia_tipo === 'CONGRESO' || $asistencia_tipo === 'CURSO_COMPLETO' || $asistencia_tipo === 'CONGRESO_MAS_MODULOS')
+      if (in_array($asistencia_tipo, array('CONGRESO', 'CURSO_COMPLETO', 'CONGRESO_MAS_MODULOS')))
         $incluye_presencial = true;
-      if ($asistencia_tipo === 'CURSO_COMPLETO')
-        $incluye_virtual = true;
-      if ($asistencia_tipo === 'MODULOS_VIRTUALES' || $asistencia_tipo === 'CONGRESO_MAS_MODULOS')
+      if (in_array($asistencia_tipo, array('CURSO_COMPLETO', 'MODULOS_VIRTUALES', 'CONGRESO_MAS_MODULOS', 'CONG_VIRTUAL', 'CONG_VIRT_MODS')))
         $incluye_virtual = true;
     } else {
       $incluye_presencial = ($mod_form === 'presencial' || $mod_form === 'hibrida');
@@ -567,7 +573,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     // Texto humano de módulos para Curso Especial
     $modulos_human = '';
     if ($mod_form === 'curso_especial') {
-      if ($asistencia_tipo === 'CURSO_COMPLETO') {
+      if ($asistencia_tipo === 'CURSO_COMPLETO' || $asistencia_tipo === 'CONG_VIRT_MODS') {
         $parts = array();
         for ($i = 0; $i < count($modulos_virtuales); $i++) {
           $m = $modulos_virtuales[$i];
@@ -632,7 +638,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       'incluye_presencial' => $incluye_presencial ? 'SI' : 'NO',
       'incluye_virtual' => $incluye_virtual ? 'SI' : 'NO',
-      'url_conexion' => $evento['url_conexion'] ?? ''
+      'url_conexion' => $evento['url_conexion'] ?? '',
+      'congreso_presencial' => $ce_tiene_presencial ? 1 : 0,
+      'congreso_virtual' => $ce_tiene_virtual ? 1 : 0
     );
 
     $MAIL_DEBUG = false;
@@ -713,7 +721,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         'modulos_texto' => $modulos_human,
         'incluye_presencial' => $incluye_presencial ? 'SI' : 'NO',
         'incluye_virtual' => $incluye_virtual ? 'SI' : 'NO',
-        'url_conexion' => $evento['url_conexion'] ?? ''
+        'url_conexion' => $evento['url_conexion'] ?? '',
+        'congreso_presencial' => $ce_tiene_presencial ? 1 : 0,
+        'congreso_virtual' => $ce_tiene_virtual ? 1 : 0
       );
 
       $okAviso = $correo->sendAvisoNuevaInscripcion($com_email, $aviso);
@@ -788,15 +798,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
         <?php if ($mod === 'curso_especial'): ?>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div class="p-4 border border-gray-300 rounded-xl bg-white">
-              <div class="font-bold text-[#942934] mb-2">📍
-                <?php echo htmlspecialchars($label_presencial, ENT_QUOTES, 'UTF-8'); ?> / Presencial</div>
-              <?php echo pintarFechasHtml($fechas_presenciales); ?>
-            </div>
-            <div class="p-4 border border-gray-300 rounded-xl bg-white">
-              <div class="font-bold text-[#942934] mb-2">💻 Módulos virtuales</div>
-              <?php echo pintarModulosVirtualesHtml($modulos_virtuales); ?>
-            </div>
+            <?php if ($ce_tiene_presencial): ?>
+              <div class="p-4 border border-gray-300 rounded-xl bg-white">
+                <div class="font-bold text-[#942934] mb-2">
+                  📍 <?php echo htmlspecialchars($label_presencial, ENT_QUOTES, 'UTF-8'); ?> / Presencial
+                </div>
+                <?php echo pintarFechasHtml($fechas_presenciales); ?>
+              </div>
+            <?php endif; ?>
+            <?php if ($ce_tiene_virtual): ?>
+              <div class="p-4 border border-gray-300 rounded-xl bg-white">
+                <div class="font-bold text-[#942934] mb-2">💻 Congreso virtual</div>
+                <?php echo pintarFechasHtml($fechas_virtuales); ?>
+              </div>
+            <?php endif; ?>
+            <?php if (!empty($modulos_virtuales)): ?>
+              <div class="p-4 border border-gray-300 rounded-xl bg-white">
+                <div class="font-bold text-[#942934] mb-2">💻 Módulos virtuales</div>
+                <?php echo pintarModulosVirtualesHtml($modulos_virtuales); ?>
+              </div>
+            <?php endif; ?>
           </div>
 
           <div class="mb-4 p-4 border border-gray-300 rounded-xl bg-[#f8fafc]">
@@ -891,43 +912,66 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
               <div class="font-semibold text-gray-900 mb-3">Seleccione su opción</div>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <label
-                  class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
-                  <input type="radio" name="curso_especial_opcion" value="CONGRESO" class="accent-[#942934]" checked>
-                  <div>
-                    <div class="font-semibold">Opción 1:
-                      <?php echo htmlspecialchars($label_presencial, ENT_QUOTES, 'UTF-8'); ?> (Presencial)</div>
-                    <div class="text-sm text-gray-600">Asiste únicamente al evento presencial.</div>
-                  </div>
-                </label>
 
-                <label
-                  class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
-                  <input type="radio" name="curso_especial_opcion" value="CURSO_COMPLETO" class="accent-[#942934]">
-                  <div>
-                    <div class="font-semibold">Opción 2: Curso completo</div>
-                    <div class="text-sm text-gray-600">Presencial + todos los módulos virtuales.</div>
-                  </div>
-                </label>
+                <?php if ($ce_tiene_presencial): ?>
+                  <!-- Opciones CE con presencial: 1, 2, 4 -->
+                  <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="curso_especial_opcion" value="CONGRESO"
+                      class="accent-[#942934]" <?php echo (!$ce_tiene_virtual) ? 'checked' : ''; ?>>
+                    <div>
+                      <div class="font-semibold">Opción 1: <?php echo htmlspecialchars($label_presencial, ENT_QUOTES, 'UTF-8'); ?> (Presencial)</div>
+                      <div class="text-sm text-gray-600">Asiste únicamente al congreso presencial.</div>
+                    </div>
+                  </label>
 
-                <label
-                  class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
-                  <input type="radio" name="curso_especial_opcion" value="MODULOS_VIRTUALES" class="accent-[#942934]">
-                  <div>
-                    <div class="font-semibold">Opción 3: Módulos virtuales</div>
-                    <div class="text-sm text-gray-600">Seleccione uno o más módulos virtuales (sin presencial).</div>
-                  </div>
-                </label>
+                  <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="curso_especial_opcion" value="CURSO_COMPLETO" class="accent-[#942934]">
+                    <div>
+                      <div class="font-semibold">Opción 2: Curso completo</div>
+                      <div class="text-sm text-gray-600">Presencial + todos los módulos virtuales.</div>
+                    </div>
+                  </label>
 
-                <label
-                  class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
-                  <input type="radio" name="curso_especial_opcion" value="CONGRESO_MAS_MODULOS" class="accent-[#942934]">
-                  <div>
-                    <div class="font-semibold">Opción 4:
-                      <?php echo htmlspecialchars($label_presencial, ENT_QUOTES, 'UTF-8'); ?> + módulos</div>
-                    <div class="text-sm text-gray-600">Presencial + seleccione uno o más módulos virtuales.</div>
-                  </div>
-                </label>
+                  <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="curso_especial_opcion" value="CONGRESO_MAS_MODULOS" class="accent-[#942934]">
+                    <div>
+                      <div class="font-semibold">Opción 4: <?php echo htmlspecialchars($label_presencial, ENT_QUOTES, 'UTF-8'); ?> + módulos</div>
+                      <div class="text-sm text-gray-600">Presencial + seleccione uno o más módulos virtuales.</div>
+                    </div>
+                  </label>
+                <?php endif; ?>
+
+                <!-- Opción 3: Módulos virtuales (siempre si hay módulos) -->
+                <?php if (!empty($modulos_virtuales)): ?>
+                  <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="curso_especial_opcion" value="MODULOS_VIRTUALES" class="accent-[#942934]">
+                    <div>
+                      <div class="font-semibold">Opción 3: Módulos virtuales</div>
+                      <div class="text-sm text-gray-600">Seleccione uno o más módulos (sin congreso).</div>
+                    </div>
+                  </label>
+                <?php endif; ?>
+
+                <?php if ($ce_tiene_virtual): ?>
+                  <!-- Opciones CE con virtual: 5, 6 -->
+                  <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="curso_especial_opcion" value="CONG_VIRTUAL"
+                      class="accent-[#942934]" <?php echo (!$ce_tiene_presencial) ? 'checked' : ''; ?>>
+                    <div>
+                      <div class="font-semibold">Opción 5: Congreso virtual</div>
+                      <div class="text-sm text-gray-600">Asiste únicamente al congreso en modalidad virtual.</div>
+                    </div>
+                  </label>
+
+                  <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="curso_especial_opcion" value="CONG_VIRT_MODS" class="accent-[#942934]">
+                    <div>
+                      <div class="font-semibold">Opción 6: Congreso virtual + todos los módulos</div>
+                      <div class="text-sm text-gray-600">Congreso virtual + todos los módulos virtuales.</div>
+                    </div>
+                  </label>
+                <?php endif; ?>
+
               </div>
 
               <div id="wrap_modulos_ce" class="mt-4 hidden">

@@ -233,18 +233,30 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 - `tipo_evento_presencial`: Congreso o Seminario
 
 ### `curso_especial`
-- Bloque presencial: fechas en `eventos_fechas` con tipo `presencial`
 - Módulos virtuales: tabla separada `eventos_modulos_virtuales` (con nombre, orden, fecha, hora)
-- 4 opciones de inscripción:
+- **Dos banderas independientes** en `eventos`:
+  - `congreso_presencial TINYINT(1) DEFAULT 1`: activa el bloque de congreso presencial
+  - `congreso_virtual    TINYINT(1) DEFAULT 0`: activa el bloque de congreso virtual
+  - Ambas pueden estar activas simultáneamente → eventos con ambos congresos
+- Fechas del congreso se guardan en `eventos_fechas`:
+  - `tipo = 'presencial'` si `congreso_presencial = 1`
+  - `tipo = 'virtual'`    si `congreso_virtual = 1`
+  - Si ambos activos, las mismas fechas se guardan con ambos tipos
+- **6 opciones totales** (la visibilidad de cada una depende de las banderas activas):
 
-| Opción | Valor `asistencia_tipo` | `incluye_presencial` | `incluye_virtual` |
-|--------|------------------------|---------------------|------------------|
-| Opción 1: Congreso/Seminario (solo presencial) | `CONGRESO` | SI | NO |
-| Opción 2: Curso completo (presencial + todos los módulos) | `CURSO_COMPLETO` | SI | SI |
-| Opción 3: Módulos virtuales (sin presencial) | `MODULOS_VIRTUALES` | NO | SI |
-| Opción 4: Congreso/Seminario + módulos seleccionados | `CONGRESO_MAS_MODULOS` | SI | SI |
+| Opción | Valor `asistencia_tipo` | Visible cuando | `incluye_presencial` | `incluye_virtual` |
+|--------|------------------------|----------------|---------------------|------------------|
+| 1: Congreso presencial | `CONGRESO` | `congreso_presencial=1` | SI | NO |
+| 2: Curso completo | `CURSO_COMPLETO` | `congreso_presencial=1` | SI | SI |
+| 3: Módulos virtuales | `MODULOS_VIRTUALES` | siempre (si hay módulos) | NO | SI |
+| 4: Congreso presencial + módulos selec. | `CONGRESO_MAS_MODULOS` | `congreso_presencial=1` | SI | SI |
+| 5: Congreso virtual | `CONG_VIRTUAL` | `congreso_virtual=1` | NO | SI |
+| 6: Congreso virtual + todos los módulos | `CONG_VIRT_MODS` | `congreso_virtual=1` | NO | SI |
 
-- `modulos_seleccionados` en `inscritos`: CSV de IDs de módulos, o `ALL` para curso completo, o vacío para solo congreso
+- Lugar presencial y guía hotelera: solo aparecen si `incluye_presencial = SI`
+- En el correo, la agenda se determina por `asistencia_tipo`, no por las banderas del evento
+- `modulos_seleccionados` en `inscritos`: CSV de IDs, `'ALL'` para todos, o `''` para solo congreso
+- `inscritos.asistencia_tipo VARCHAR(25)` — CONG_VIRTUAL=12, CONG_VIRT_MODS=14, CONGRESO_MAS_MODULOS=20
 
 ---
 
@@ -259,6 +271,8 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 | imagen | VARCHAR | Nombre de archivo en `uploads/eventos/` |
 | modalidad | VARCHAR(50) | Valores en BD: "Presencial", "Virtual", "Hibrida", "Curso_Especial", "Públicamente Hablando (Virtual)". Case mixto — siempre normalizar con `norm_modalidad()` en PHP |
 | tipo_evento_presencial | **ENUM('Congreso','Seminario')** NULL | Solo aplica a modalidades con bloque presencial |
+| congreso_presencial | TINYINT(1) NOT NULL DEFAULT 1 | Solo Curso Especial: 1 = congreso presencial disponible |
+| congreso_virtual | TINYINT(1) NOT NULL DEFAULT 0 | Solo Curso Especial: 1 = congreso virtual disponible |
 | lugar_personalizado | TEXT NULL | Lugar alternativo al por defecto |
 | url_conexion | VARCHAR(500) NULL | URL opcional de acceso al evento. Si se diligencia, se muestra como botón en el correo al inscrito |
 | fecha_limite | DATE | Fecha límite para confirmar asistencia |

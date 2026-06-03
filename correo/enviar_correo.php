@@ -258,6 +258,8 @@ class CorreoDenuncia
                 'CURSO_COMPLETO' => 'Opción 2: Curso completo (Presencial + todos los módulos virtuales)',
                 'MODULOS_VIRTUALES' => 'Opción 3: Módulos virtuales (sin presencial)',
                 'CONGRESO_MAS_MODULOS' => 'Opción 4: ' . $tipoPresLabel . ' (Presencial) + módulos virtuales',
+                'CONG_VIRTUAL' => 'Opción 5: Congreso virtual',
+                'CONG_VIRT_MODS' => 'Opción 6: Congreso virtual + todos los módulos virtuales',
             ];
             $line1 = $map[$asistencia_tipo] ?? ('Selección: ' . $this->h($asistencia_tipo));
         } else {
@@ -504,31 +506,31 @@ class CorreoDenuncia
                 $evento_id = (int) $data['evento_id'];
 
                 if ($modalidadLowNorm === 'curso_especial') {
-                    // agenda presencial
-                    $pres = $this->getEventoFechas($evento_id, 'presencial');
-                    $agendaPres = $this->buildListaFechasHtml($pres, 'Día');
-
-                    // agenda módulos seleccionados (según asistencia_tipo)
                     $asist = strtoupper(trim((string) ($data['asistencia_tipo'] ?? '')));
                     $modsCsv = (string) ($data['modulos_fechas'] ?? '');
-                    $mods = [];
 
-                    if ($asist === 'CURSO_COMPLETO') {
-                        $mods = $this->getCursoEspecialModulos($evento_id, 'ALL');
-                    } elseif ($asist === 'MODULOS_VIRTUALES' || $asist === 'CONGRESO_MAS_MODULOS') {
-                        $mods = $this->getCursoEspecialModulos($evento_id, $modsCsv);
-                    } else {
-                        $mods = [];
+                    // Qué mostrar en agenda según lo que eligió el inscrito
+                    $mostrar_pres = in_array($asist, ['CONGRESO', 'CURSO_COMPLETO', 'CONGRESO_MAS_MODULOS']);
+                    $mostrar_virt = in_array($asist, ['CONG_VIRTUAL', 'CONG_VIRT_MODS']);
+                    $mostrar_mods = in_array($asist, ['CURSO_COMPLETO', 'MODULOS_VIRTUALES', 'CONGRESO_MAS_MODULOS', 'CONG_VIRT_MODS']);
+
+                    if ($mostrar_pres) {
+                        $pres = $this->getEventoFechas($evento_id, 'presencial');
+                        $agendaHtml .= $this->buildBox('📌 Agenda (Presencial)', $this->buildListaFechasHtml($pres, 'Día'));
                     }
 
-                    $agendaMods = $this->buildListaModulosCEHtml($mods);
+                    if ($mostrar_virt) {
+                        $virt = $this->getEventoFechas($evento_id, 'virtual');
+                        $agendaHtml .= $this->buildBox('📌 Agenda (Congreso virtual)', $this->buildListaFechasHtml($virt, 'Día'));
+                    }
 
-                    $agendaHtml .= $this->buildBox('📌 Agenda (Presencial)', $agendaPres);
-
-                    // solo mostramos módulos si aplica virtual en la selección
-                    $incluyeV2 = (strtoupper((string) ($data['incluye_virtual'] ?? 'NO')) === 'SI');
-                    if ($incluyeV2) {
-                        $agendaHtml .= $this->buildBox('💻 Agenda (Módulos virtuales)', $agendaMods);
+                    if ($mostrar_mods) {
+                        if ($asist === 'CURSO_COMPLETO' || $asist === 'CONG_VIRT_MODS') {
+                            $mods = $this->getCursoEspecialModulos($evento_id, 'ALL');
+                        } else {
+                            $mods = $this->getCursoEspecialModulos($evento_id, $modsCsv);
+                        }
+                        $agendaHtml .= $this->buildBox('💻 Agenda (Módulos virtuales)', $this->buildListaModulosCEHtml($mods));
                     }
                 } else {
                     // comportamiento original: si el usuario eligió MODULOS (virtual clásico), mostrar solo esos
@@ -841,6 +843,8 @@ class CorreoDenuncia
                 'CURSO_COMPLETO' => 'Opción 2: Curso completo (Presencial + todos los módulos virtuales)',
                 'MODULOS_VIRTUALES' => 'Opción 3: Módulos virtuales (sin presencial)',
                 'CONGRESO_MAS_MODULOS' => 'Opción 4: ' . $tipoPresLabel . ' (Presencial) + módulos virtuales',
+                'CONG_VIRTUAL' => 'Opción 5: Congreso virtual',
+                'CONG_VIRT_MODS' => 'Opción 6: Congreso virtual + todos los módulos virtuales',
             ];
             $selNice = isset($mapCE[$asist]) ? $mapCE[$asist] : ($asist ?: 'COMPLETO');
 
