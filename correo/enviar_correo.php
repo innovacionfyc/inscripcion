@@ -263,7 +263,11 @@ class CorreoDenuncia
             ];
             $line1 = $map[$asistencia_tipo] ?? ('Selección: ' . $this->h($asistencia_tipo));
         } else {
-            if ($asistencia_tipo === 'MODULOS') {
+            if ($asistencia_tipo === 'HIBRIDO') {
+                $line1 = 'Asistencia: Híbrido (presencial + virtual)';
+            } elseif ($asistencia_tipo === 'HIB_VIRTUAL') {
+                $line1 = 'Asistencia: 100% virtual';
+            } elseif ($asistencia_tipo === 'MODULOS') {
                 $line1 = 'Asistencia: Por módulos';
             } elseif ($asistencia_tipo === 'COMPLETO') {
                 $line1 = 'Asistencia: Curso completo';
@@ -532,6 +536,18 @@ class CorreoDenuncia
                         }
                         $agendaHtml .= $this->buildBox('💻 Agenda (Módulos virtuales)', $this->buildListaModulosCEHtml($mods));
                     }
+                } elseif ($modalidadLowNorm === 'hibrida') {
+                    // Híbrida: agenda separada por tipo según la selección del inscrito
+                    $asist = strtoupper(trim((string) ($data['asistencia_tipo'] ?? '')));
+
+                    // HIB_VIRTUAL no incluye presencial; HIBRIDO (y registros antiguos) sí
+                    if ($asist !== 'HIB_VIRTUAL') {
+                        $pres = $this->getEventoFechas($evento_id, 'presencial');
+                        $agendaHtml .= $this->buildBox('📍 Agenda (Presencial)', $this->buildListaFechasHtml($pres, 'Día'));
+                    }
+
+                    $virt = $this->getEventoFechas($evento_id, 'virtual');
+                    $agendaHtml .= $this->buildBox('💻 Agenda (Virtual)', $this->buildListaFechasHtml($virt, 'Día'));
                 } else {
                     // comportamiento original: si el usuario eligió MODULOS (virtual clásico), mostrar solo esos
                     $detalleHorarioFinal = $detalleHorario;
@@ -746,6 +762,14 @@ class CorreoDenuncia
             $altModalidad = $data['modalidad'] ?? '';
             $altResumen = strip_tags((string) $resumenFechas);
             $altSel = $data['asistencia_tipo'] ?? '';
+            // Texto plano legible para la selección de modalidad Híbrida
+            $mapAltSel = [
+                'HIBRIDO' => 'Híbrido (presencial + virtual)',
+                'HIB_VIRTUAL' => '100% virtual',
+            ];
+            if (isset($mapAltSel[$altSel])) {
+                $altSel = $mapAltSel[$altSel];
+            }
             $altMods = $data['modulos_texto'] ?? '';
             $altAuto = (!empty($data['autoestudio']) && (int) $data['autoestudio'] === 1) ? " Incluye Autoestudio." : "";
             $altUrl = !empty($data['url_conexion']) ? " Enlace de acceso: " . (string) $data['url_conexion'] . "." : "";
@@ -846,7 +870,13 @@ class CorreoDenuncia
                 'CONG_VIRTUAL' => 'Opción 5: Congreso virtual',
                 'CONG_VIRT_MODS' => 'Opción 6: Curso completo virtual',
             ];
-            $selNice = isset($mapCE[$asist]) ? $mapCE[$asist] : ($asist ?: 'COMPLETO');
+            // Modalidad Híbrida: selección del inscrito
+            $mapHib = [
+                'HIBRIDO' => 'Híbrido (presencial + virtual)',
+                'HIB_VIRTUAL' => '100% virtual',
+            ];
+            $selNice = isset($mapCE[$asist]) ? $mapCE[$asist]
+                : (isset($mapHib[$asist]) ? $mapHib[$asist] : ($asist ?: 'COMPLETO'));
 
             $tags = [];
             if ($incluyeP)

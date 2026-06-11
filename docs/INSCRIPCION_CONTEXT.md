@@ -40,6 +40,7 @@ inscripcion/
 │   ├── login.php            Formulario de ingreso
 │   ├── logout.php           Cierre de sesión
 │   ├── crear_evento.php     Alta de nuevos eventos (con módulos, fechas, tipo)
+│   ├── editar_evento.php    Edición de eventos existentes (slug inmutable)
 │   ├── crear_evento_FUNCIONA.php  Backup/copia de seguridad del admin
 │   ├── eventos.php          Listado de eventos activos
 │   ├── inscritos.php        Lista de inscritos por evento (con filtros, export, estados)
@@ -117,6 +118,18 @@ Panel de creación de eventos. Responsabilidades:
 - En POST: guarda evento en `eventos`, fechas en `eventos_fechas`, módulos en `eventos_modulos_virtuales`
 - Maneja upload de imagen de portada y adjuntos por modalidad
 - JS dinámico: muestra/oculta campos según modalidad elegida
+
+### `admin/editar_evento.php` (Fase 1 — 2026-06-11)
+Edición de eventos ya creados **sin cambiar la URL pública**:
+- Acceso: cualquier usuario logueado (igual que crear), con registro en `audit_log` (`editar_evento`)
+- **`slug` es INMUTABLE**: no se incluye en el UPDATE ni se regenera al cambiar el nombre
+- **`modalidad`, `congreso_presencial` y `congreso_virtual` son SOLO LECTURA** (fase 1)
+- Editables: nombre, fecha_limite, lugar_personalizado, url_conexion, comercial, autoestudio, tipo_evento_presencial, imagen (solo si se sube nueva), fechas, módulos virtuales
+- Adjuntos: solo se pueden AGREGAR nuevos; los existentes se conservan (eliminación = fase 2)
+- Fechas: reemplazo delete+insert **solo si hubo cambios reales**; si el formulario llega vacío, se conservan las actuales
+- Módulos virtuales: UPDATE en sitio por id / INSERT nuevos / quitados → `activo = 0` (**nunca DELETE**, los IDs referenciados por `inscritos.modulos_seleccionados` se preservan)
+- Si el evento tiene inscritos y se modifican fechas/módulos, exige checkbox `confirmar_cambios_sensibles`
+- No requirió SQL (el campo `activo` ya existía en `eventos_modulos_virtuales`)
 
 ### `correo/enviar_correo.php`
 Clase `CorreoDenuncia` con PHPMailer. Dos métodos públicos:
@@ -231,6 +244,20 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 - Fechas divididas: presenciales + virtuales en `eventos_fechas`
 - Muestra bloque de ambas fechas en el formulario
 - `tipo_evento_presencial`: Congreso o Seminario
+- **Selección del inscrito** (2 opciones, radio `asistencia_tipo`):
+
+| Opción | Valor `asistencia_tipo` | `incluye_presencial` | `incluye_virtual` |
+|--------|------------------------|---------------------|------------------|
+| Híbrido (presencial + virtual) — default | `HIBRIDO` | SI | SI |
+| 100% virtual | `HIB_VIRTUAL` | NO | SI |
+
+- Fallback seguro en POST: `HIBRIDO` (reproduce el comportamiento histórico)
+- `modulos_seleccionados` siempre `''` (no hay módulos en Híbrida)
+- `HIB_VIRTUAL`: sin lugar presencial, sin guía hotelera, sin adjuntos presenciales; con URL de conexión si existe
+- `HIBRIDO`: con lugar (y guía hotelera si usa lugar por defecto); con URL de conexión si existe
+- Correos: agenda separada en dos bloques — "📍 Agenda (Presencial)" (solo si incluye presencial) y "💻 Agenda (Virtual)" — ya no se mezclan las fechas en un solo bloque
+- Inscritos híbridos históricos tienen `asistencia_tipo='COMPLETO'`: siguen tratándose como presencial+virtual (sin backfill)
+- No requirió SQL ni cambios en `admin/crear_evento.php`
 
 ### `curso_especial`
 - Módulos virtuales: tabla separada `eventos_modulos_virtuales` (con nombre, orden, fecha, hora)
@@ -322,7 +349,7 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 | email_corporativo | VARCHAR | Destinatario principal del correo |
 | medio | VARCHAR | Cómo se enteró del evento |
 | soporte_pago | VARCHAR NULL | Ruta relativa en `uploads/soportes/` |
-| asistencia_tipo | VARCHAR | COMPLETO, MODULOS, CONGRESO, CURSO_COMPLETO, MODULOS_VIRTUALES, CONGRESO_MAS_MODULOS |
+| asistencia_tipo | VARCHAR(25) | COMPLETO, MODULOS, CONGRESO, CURSO_COMPLETO, MODULOS_VIRTUALES, CONGRESO_MAS_MODULOS, CONG_VIRTUAL, CONG_VIRT_MODS, HIBRIDO, HIB_VIRTUAL |
 | modulos_seleccionados | VARCHAR NULL | CSV de IDs, "ALL", o vacío |
 | whatsapp_consent | **ENUM('SI','NO')** NULL | |
 | fecha_registro | DATETIME | Timestamp de registro |
@@ -377,9 +404,22 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 
 ## 11. Cambios Recientes Detectados
 
-### Estado actual: `main` en `c1cf333` (2026-06-03)
-- Último merge: PR #2 — modalidad Públicamente Hablando (Virtual)
-- Anterior: PR #1 — URL de conexión opcional + tipo evento presencial
+### Rama `feature/editar-eventos` (2026-06-11)
+- Nuevo `admin/editar_evento.php` — edición fase 1 con slug inmutable (ver sección 4)
+- Botón "✏️ Editar" agregado en `admin/eventos.php`
+- Sin SQL; sin cambios en `crear_evento.php`, `registro.php` ni `enviar_correo.php`
+
+### Rama `feature/opciones-inscripcion-hibrida` (2026-06-11)
+- Modalidad **Híbrida** ahora tiene selección del inscrito: `HIBRIDO` (default) o `HIB_VIRTUAL` (ver sección 8)
+- Nuevos códigos `asistencia_tipo`: `HIBRIDO` (7 chars), `HIB_VIRTUAL` (11 chars) — caben en VARCHAR(25), **sin SQL**
+- `registro.php`: bloque de 2 radios para Híbrida; rama POST propia; flag `incluye_presencial` condicionado a la selección
+- `enviar_correo.php`: textos de selección en correo participante y comercial; agenda Híbrida separada en bloques Presencial/Virtual
+- `admin/crear_evento.php` **no fue modificado** (la creación híbrida ya capturaba todo lo necesario)
+
+### Estado anterior: `main` en `2c79ebe` (2026-06-03)
+- PR #4 — congreso presencial y/o virtual en Curso Especial
+- PR #2 — modalidad Públicamente Hablando (Virtual)
+- PR #1 — URL de conexión opcional + tipo evento presencial
 
 ### Campo `tipo_evento_presencial`
 - **Tipo real en BD**: `ENUM('Congreso','Seminario')` NULL (no VARCHAR)

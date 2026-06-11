@@ -455,6 +455,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     } else {
       $modulos_csv = implode(',', $validas);
     }
+  }
+  // Híbrida: el inscrito elige Híbrido (presencial + virtual) o 100% virtual
+  else if ($mod_form === 'hibrida') {
+    $asistencia_tipo = isset($_POST['asistencia_tipo']) ? strtoupper(trim($_POST['asistencia_tipo'])) : 'HIBRIDO';
+    if ($asistencia_tipo !== 'HIB_VIRTUAL') {
+      $asistencia_tipo = 'HIBRIDO';
+    }
+    $modulos_csv = '';
   } else {
     $asistencia_tipo = 'COMPLETO';
     $modulos_csv = '';
@@ -532,7 +540,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       if (in_array($asistencia_tipo, array('CURSO_COMPLETO', 'MODULOS_VIRTUALES', 'CONGRESO_MAS_MODULOS', 'CONG_VIRTUAL', 'CONG_VIRT_MODS')))
         $incluye_virtual = true;
     } else {
-      $incluye_presencial = ($mod_form === 'presencial' || $mod_form === 'hibrida');
+      // Híbrida: si el inscrito eligió 100% virtual (HIB_VIRTUAL), no incluye presencial
+      $incluye_presencial = ($mod_form === 'presencial' || ($mod_form === 'hibrida' && $asistencia_tipo !== 'HIB_VIRTUAL'));
       $incluye_virtual = ($mod_form === 'virtual' || $mod_form === 'hibrida' || $mod_form === 'públicamente_hablando_(virtual)');
     }
 
@@ -903,6 +912,30 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                   <?php endfor; ?>
                 </div>
                 <p class="text-xs text-gray-500 mt-2">Seleccione al menos un día.</p>
+              </div>
+            </div>
+          <?php endif; ?>
+
+          <?php if ($mod === 'hibrida'): ?>
+            <div class="p-4 border border-gray-300 rounded-xl">
+              <div class="font-semibold text-gray-800 mb-3">Seleccione su tipo de asistencia</div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                  <input type="radio" name="asistencia_tipo" value="HIBRIDO" class="accent-[#942934]" checked>
+                  <div>
+                    <div class="font-semibold">Híbrido (presencial + virtual)</div>
+                    <div class="text-sm text-gray-600">Asiste a las sesiones presenciales y virtuales del evento.</div>
+                  </div>
+                </label>
+
+                <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                  <input type="radio" name="asistencia_tipo" value="HIB_VIRTUAL" class="accent-[#942934]">
+                  <div>
+                    <div class="font-semibold">100% virtual</div>
+                    <div class="text-sm text-gray-600">Asiste a todo el evento en modalidad virtual.</div>
+                  </div>
+                </label>
               </div>
             </div>
           <?php endif; ?>

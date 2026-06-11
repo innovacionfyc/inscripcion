@@ -1,38 +1,39 @@
 # NEXT_STEPS — Estado actual y próximos pasos
 
-> Complementa `INSCRIPCION_CONTEXT.md`. Actualizado: 2026-06-03.
+> Complementa `INSCRIPCION_CONTEXT.md`. Actualizado: 2026-06-11.
 
 ---
 
 ## Estado Actual del Proyecto
 
-- Rama activa de desarrollo: `feature/congreso-virtual-curso-especial`
-- Último commit en main: `6693042` — "Merge pull request #3 chore: actualiza gitignore y documentación"
+- Rama activa de desarrollo: `feature/editar-eventos` (basada en `feature/opciones-inscripcion-hibrida`, commit `c1f5472`)
+- Último commit en main: `2c79ebe` — "fix: ajusta texto y orden de opciones de curso especial"
+- **Nuevo (2026-06-11): edición de eventos — Fase 1** (`admin/editar_evento.php` + botón en `admin/eventos.php`):
+  - URL pública/slug **inmutable** (cambiar el nombre no cambia la URL)
+  - Modalidad y banderas `congreso_*` en solo lectura (fase 1)
+  - Módulos virtuales: update por id / insert / soft-delete `activo=0` — nunca DELETE (protege `inscritos.modulos_seleccionados`)
+  - Fechas: reemplazo solo si hubo cambios reales; con inscritos exige confirmación explícita
+  - Adjuntos: solo agregar; eliminar adjuntos existentes queda para **fase 2**
+  - **No requirió SQL**
 - El sistema está funcional y en producción (`https://inscripcion.fycconsultores.com/public/`)
-- BD local verificada: 55 eventos, 559 inscritos (2026-06-03)
-- **BD LOCAL migrada** con `congreso_virtual` y `asistencia_tipo VARCHAR(25)`. **Producción pendiente** — ver SQL abajo.
 - El formulario de inscripción maneja **5 modalidades**:
   - `Presencial` — con tipo Congreso/Seminario
   - `Virtual` — COMPLETO o por MODULOS
-  - `Hibrida` — con tipo Congreso/Seminario
+  - `Hibrida` — con tipo Congreso/Seminario + **selección del inscrito: HIBRIDO (default) o HIB_VIRTUAL**
   - `Curso_Especial` — hasta 6 opciones: 4 presenciales + 2 virtuales (según `congreso_virtual`)
   - `Públicamente Hablando (Virtual)` — modalidad gratuita, sin soporte de pago
 - Los correos al inscrito y al comercial se envían correctamente vía PHPMailer + SMTP Gmail Relay
 - **Schema real verificado en BD local** (ver sección de BD más abajo)
 
-## ⚠️ SQL PENDIENTE PARA PRODUCCIÓN
+## SQL — Estado de migraciones
 
-Antes del deploy de `feature/congreso-virtual-curso-especial`, ejecutar en producción:
+- ✅ `docs/sql/2026_05_22_add_url_conexion_eventos.sql` — aplicada en LOCAL y PRODUCCIÓN
+- ✅ `docs/sql/2026_06_03_congreso_virtual_curso_especial.sql` — **aplicada en LOCAL y PRODUCCIÓN** (ya no está pendiente)
+- ✅ `feature/opciones-inscripcion-hibrida` — **NO requiere SQL**: los códigos `HIBRIDO` (7) y `HIB_VIRTUAL` (11) caben en `asistencia_tipo VARCHAR(25)` ya existente en ambas BD
 
-```
-docs/sql/2026_06_03_congreso_virtual_curso_especial.sql
-```
-
-Contiene:
-1. `ALTER TABLE eventos ADD COLUMN congreso_virtual TINYINT(1) NOT NULL DEFAULT 0` — backward-compatible, DEFAULT 0 protege eventos existentes
-2. `ALTER TABLE inscritos MODIFY COLUMN asistencia_tipo VARCHAR(25) NULL` — amplía límite sin pérdida de datos
-
-**LOCAL ya migrado. PRODUCCIÓN pendiente.**
+> Nota: existe una rama local pausada `feature/diplomado-curso-especial` (commit `9242e4e`)
+> con su propia migración (`2026_06_11_diplomado_tipo_evento_presencial.sql`, aplicada solo
+> en BD LOCAL). Si esa rama se retoma, su SQL deberá ejecutarse en producción antes de su deploy.
 
 ---
 
@@ -54,11 +55,11 @@ Contiene:
 | Tabla.Columna | Tipo Real | Nota |
 |---|---|---|
 | `eventos.modalidad` | `VARCHAR(50)` | Case mixto en datos actuales |
-| `eventos.tipo_evento_presencial` | `ENUM('Congreso','Seminario')` NULL | No VARCHAR como inferido antes |
-| `eventos.congreso_presencial` | `TINYINT(1) NOT NULL DEFAULT 1` | LOCAL migrado; PRODUCCIÓN pendiente |
-| `eventos.congreso_virtual` | `TINYINT(1) NOT NULL DEFAULT 0` | LOCAL migrado; PRODUCCIÓN pendiente |
+| `eventos.tipo_evento_presencial` | `ENUM('Congreso','Seminario')` NULL | En BD LOCAL puede aparecer también 'Diplomado' (rama pausada, solo local) |
+| `eventos.congreso_presencial` | `TINYINT(1) NOT NULL DEFAULT 1` | Aplicado en LOCAL y PRODUCCIÓN ✅ |
+| `eventos.congreso_virtual` | `TINYINT(1) NOT NULL DEFAULT 0` | Aplicado en LOCAL y PRODUCCIÓN ✅ |
 | `eventos.url_conexion` | `VARCHAR(500)` NULL | Migración `2026_05_22` aplicada |
-| `inscritos.asistencia_tipo` | `VARCHAR(25)` NULL | LOCAL migrado a 25; PRODUCCIÓN pendiente |
+| `inscritos.asistencia_tipo` | `VARCHAR(25)` NULL | Aplicado en LOCAL y PRODUCCIÓN ✅. HIBRIDO/HIB_VIRTUAL caben sin cambios |
 | `inscritos.whatsapp_consent` | `ENUM('SI','NO')` NULL | No VARCHAR |
 | `inscritos.estado_contacto` | `VARCHAR(30)` NOT NULL DEFAULT `pendiente_confirmacion` | Gestionado desde `admin/inscritos.php` |
 | `usuarios.rol` | `ENUM('admin','editor')` | No VARCHAR genérico |
