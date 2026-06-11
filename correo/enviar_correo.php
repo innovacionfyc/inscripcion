@@ -762,6 +762,14 @@ class CorreoDenuncia
             $altModalidad = $data['modalidad'] ?? '';
             $altResumen = strip_tags((string) $resumenFechas);
             $altSel = $data['asistencia_tipo'] ?? '';
+            // Texto plano legible para la selección de modalidad Híbrida
+            $mapAltSel = [
+                'HIBRIDO' => 'Híbrido (presencial + virtual)',
+                'HIB_VIRTUAL' => '100% virtual',
+            ];
+            if (isset($mapAltSel[$altSel])) {
+                $altSel = $mapAltSel[$altSel];
+            }
             $altMods = $data['modulos_texto'] ?? '';
             $altAuto = (!empty($data['autoestudio']) && (int) $data['autoestudio'] === 1) ? " Incluye Autoestudio." : "";
             $altUrl = !empty($data['url_conexion']) ? " Enlace de acceso: " . (string) $data['url_conexion'] . "." : "";
