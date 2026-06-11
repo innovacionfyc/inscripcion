@@ -6,8 +6,15 @@
 
 ## Estado Actual del Proyecto
 
-- Rama activa de desarrollo: `feature/opciones-inscripcion-hibrida`
+- Rama activa de desarrollo: `feature/editar-eventos` (basada en `feature/opciones-inscripcion-hibrida`, commit `c1f5472`)
 - Último commit en main: `2c79ebe` — "fix: ajusta texto y orden de opciones de curso especial"
+- **Nuevo (2026-06-11): edición de eventos — Fase 1** (`admin/editar_evento.php` + botón en `admin/eventos.php`):
+  - URL pública/slug **inmutable** (cambiar el nombre no cambia la URL)
+  - Modalidad y banderas `congreso_*` en solo lectura (fase 1)
+  - Módulos virtuales: update por id / insert / soft-delete `activo=0` — nunca DELETE (protege `inscritos.modulos_seleccionados`)
+  - Fechas: reemplazo solo si hubo cambios reales; con inscritos exige confirmación explícita
+  - Adjuntos: solo agregar; eliminar adjuntos existentes queda para **fase 2**
+  - **No requirió SQL**
 - El sistema está funcional y en producción (`https://inscripcion.fycconsultores.com/public/`)
 - El formulario de inscripción maneja **5 modalidades**:
   - `Presencial` — con tipo Congreso/Seminario

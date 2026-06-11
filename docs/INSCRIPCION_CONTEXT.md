@@ -40,6 +40,7 @@ inscripcion/
 │   ├── login.php            Formulario de ingreso
 │   ├── logout.php           Cierre de sesión
 │   ├── crear_evento.php     Alta de nuevos eventos (con módulos, fechas, tipo)
+│   ├── editar_evento.php    Edición de eventos existentes (slug inmutable)
 │   ├── crear_evento_FUNCIONA.php  Backup/copia de seguridad del admin
 │   ├── eventos.php          Listado de eventos activos
 │   ├── inscritos.php        Lista de inscritos por evento (con filtros, export, estados)
@@ -117,6 +118,18 @@ Panel de creación de eventos. Responsabilidades:
 - En POST: guarda evento en `eventos`, fechas en `eventos_fechas`, módulos en `eventos_modulos_virtuales`
 - Maneja upload de imagen de portada y adjuntos por modalidad
 - JS dinámico: muestra/oculta campos según modalidad elegida
+
+### `admin/editar_evento.php` (Fase 1 — 2026-06-11)
+Edición de eventos ya creados **sin cambiar la URL pública**:
+- Acceso: cualquier usuario logueado (igual que crear), con registro en `audit_log` (`editar_evento`)
+- **`slug` es INMUTABLE**: no se incluye en el UPDATE ni se regenera al cambiar el nombre
+- **`modalidad`, `congreso_presencial` y `congreso_virtual` son SOLO LECTURA** (fase 1)
+- Editables: nombre, fecha_limite, lugar_personalizado, url_conexion, comercial, autoestudio, tipo_evento_presencial, imagen (solo si se sube nueva), fechas, módulos virtuales
+- Adjuntos: solo se pueden AGREGAR nuevos; los existentes se conservan (eliminación = fase 2)
+- Fechas: reemplazo delete+insert **solo si hubo cambios reales**; si el formulario llega vacío, se conservan las actuales
+- Módulos virtuales: UPDATE en sitio por id / INSERT nuevos / quitados → `activo = 0` (**nunca DELETE**, los IDs referenciados por `inscritos.modulos_seleccionados` se preservan)
+- Si el evento tiene inscritos y se modifican fechas/módulos, exige checkbox `confirmar_cambios_sensibles`
+- No requirió SQL (el campo `activo` ya existía en `eventos_modulos_virtuales`)
 
 ### `correo/enviar_correo.php`
 Clase `CorreoDenuncia` con PHPMailer. Dos métodos públicos:
@@ -390,6 +403,11 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 ---
 
 ## 11. Cambios Recientes Detectados
+
+### Rama `feature/editar-eventos` (2026-06-11)
+- Nuevo `admin/editar_evento.php` — edición fase 1 con slug inmutable (ver sección 4)
+- Botón "✏️ Editar" agregado en `admin/eventos.php`
+- Sin SQL; sin cambios en `crear_evento.php`, `registro.php` ni `enviar_correo.php`
 
 ### Rama `feature/opciones-inscripcion-hibrida` (2026-06-11)
 - Modalidad **Híbrida** ahora tiene selección del inscrito: `HIBRIDO` (default) o `HIB_VIRTUAL` (ver sección 8)

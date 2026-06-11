@@ -92,6 +92,12 @@ $conn->close();
                 📋 Copiar enlace
               </button>
 
+              <!-- Editar evento (la URL pública no cambia) -->
+              <a href="editar_evento.php?id=<?php echo (int)$ev['id']; ?>"
+                 class="bg-sky-600 hover:bg-sky-700 text-white px-3 py-2 rounded-xl text-sm">
+                ✏️ Editar
+              </a>
+
               <!-- Exportar CSV -->
               <a href="evento_export_xls.php?id=<?php echo (int)$ev['id']; ?>"
                  class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-sm">
