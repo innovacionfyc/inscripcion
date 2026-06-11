@@ -231,6 +231,20 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 - Fechas divididas: presenciales + virtuales en `eventos_fechas`
 - Muestra bloque de ambas fechas en el formulario
 - `tipo_evento_presencial`: Congreso o Seminario
+- **Selección del inscrito** (2 opciones, radio `asistencia_tipo`):
+
+| Opción | Valor `asistencia_tipo` | `incluye_presencial` | `incluye_virtual` |
+|--------|------------------------|---------------------|------------------|
+| Híbrido (presencial + virtual) — default | `HIBRIDO` | SI | SI |
+| 100% virtual | `HIB_VIRTUAL` | NO | SI |
+
+- Fallback seguro en POST: `HIBRIDO` (reproduce el comportamiento histórico)
+- `modulos_seleccionados` siempre `''` (no hay módulos en Híbrida)
+- `HIB_VIRTUAL`: sin lugar presencial, sin guía hotelera, sin adjuntos presenciales; con URL de conexión si existe
+- `HIBRIDO`: con lugar (y guía hotelera si usa lugar por defecto); con URL de conexión si existe
+- Correos: agenda separada en dos bloques — "📍 Agenda (Presencial)" (solo si incluye presencial) y "💻 Agenda (Virtual)" — ya no se mezclan las fechas en un solo bloque
+- Inscritos híbridos históricos tienen `asistencia_tipo='COMPLETO'`: siguen tratándose como presencial+virtual (sin backfill)
+- No requirió SQL ni cambios en `admin/crear_evento.php`
 
 ### `curso_especial`
 - Módulos virtuales: tabla separada `eventos_modulos_virtuales` (con nombre, orden, fecha, hora)
@@ -322,7 +336,7 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 | email_corporativo | VARCHAR | Destinatario principal del correo |
 | medio | VARCHAR | Cómo se enteró del evento |
 | soporte_pago | VARCHAR NULL | Ruta relativa en `uploads/soportes/` |
-| asistencia_tipo | VARCHAR | COMPLETO, MODULOS, CONGRESO, CURSO_COMPLETO, MODULOS_VIRTUALES, CONGRESO_MAS_MODULOS |
+| asistencia_tipo | VARCHAR(25) | COMPLETO, MODULOS, CONGRESO, CURSO_COMPLETO, MODULOS_VIRTUALES, CONGRESO_MAS_MODULOS, CONG_VIRTUAL, CONG_VIRT_MODS, HIBRIDO, HIB_VIRTUAL |
 | modulos_seleccionados | VARCHAR NULL | CSV de IDs, "ALL", o vacío |
 | whatsapp_consent | **ENUM('SI','NO')** NULL | |
 | fecha_registro | DATETIME | Timestamp de registro |
@@ -377,9 +391,17 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 
 ## 11. Cambios Recientes Detectados
 
-### Estado actual: `main` en `c1cf333` (2026-06-03)
-- Último merge: PR #2 — modalidad Públicamente Hablando (Virtual)
-- Anterior: PR #1 — URL de conexión opcional + tipo evento presencial
+### Rama `feature/opciones-inscripcion-hibrida` (2026-06-11)
+- Modalidad **Híbrida** ahora tiene selección del inscrito: `HIBRIDO` (default) o `HIB_VIRTUAL` (ver sección 8)
+- Nuevos códigos `asistencia_tipo`: `HIBRIDO` (7 chars), `HIB_VIRTUAL` (11 chars) — caben en VARCHAR(25), **sin SQL**
+- `registro.php`: bloque de 2 radios para Híbrida; rama POST propia; flag `incluye_presencial` condicionado a la selección
+- `enviar_correo.php`: textos de selección en correo participante y comercial; agenda Híbrida separada en bloques Presencial/Virtual
+- `admin/crear_evento.php` **no fue modificado** (la creación híbrida ya capturaba todo lo necesario)
+
+### Estado anterior: `main` en `2c79ebe` (2026-06-03)
+- PR #4 — congreso presencial y/o virtual en Curso Especial
+- PR #2 — modalidad Públicamente Hablando (Virtual)
+- PR #1 — URL de conexión opcional + tipo evento presencial
 
 ### Campo `tipo_evento_presencial`
 - **Tipo real en BD**: `ENUM('Congreso','Seminario')` NULL (no VARCHAR)
