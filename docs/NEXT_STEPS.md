@@ -6,9 +6,16 @@
 
 ## Estado Actual del Proyecto
 
-- Rama activa de desarrollo: `feature/editar-eventos` (basada en `feature/opciones-inscripcion-hibrida`, commit `c1f5472`)
-- Último commit en main: `2c79ebe` — "fix: ajusta texto y orden de opciones de curso especial"
-- **Nuevo (2026-06-11): edición de eventos — Fase 1** (`admin/editar_evento.php` + botón en `admin/eventos.php`):
+- Rama activa de desarrollo: `feature/editar-usuarios-firma` (basada en `main` `7718ca3`)
+- Último commit en main: `7718ca3` — "Merge pull request #5 (opciones híbridas + edición de eventos)"
+- **Nuevo (2026-06-11): edición de usuarios — Fase 1** (`admin/editar_usuario.php` + botón en `admin/usuarios.php`):
+  - Editables: nombre, email, whatsapp, rol, activo y firma (subida opcional)
+  - `usuario` (login) **solo lectura**; contraseña sin cambios aquí (se mantiene "Reset clave")
+  - Firma nueva opcional (png/jpg/jpeg/webp, MIME real, 2MB); la anterior **no se borra** (fase 2)
+  - Protecciones de último admin replicadas; email validado y sin duplicados
+  - **No requirió SQL**; **no toca `correo/enviar_correo.php`** (ya consume `usuarios.firma_path`)
+  - `webp` también habilitado en la creación de usuarios
+- **Edición de eventos — Fase 1** (`admin/editar_evento.php` + botón en `admin/eventos.php`), ya en `main`:
   - URL pública/slug **inmutable** (cambiar el nombre no cambia la URL)
   - Modalidad y banderas `congreso_*` en solo lectura (fase 1)
   - Módulos virtuales: update por id / insert / soft-delete `activo=0` — nunca DELETE (protege `inscritos.modulos_seleccionados`)

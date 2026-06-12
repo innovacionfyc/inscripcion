@@ -49,7 +49,8 @@ inscripcion/
 │   ├── evento_export.php    Exportación CSV de inscritos
 │   ├── evento_export_xls.php Exportación XLS de inscritos
 │   ├── actividad.php        Log de auditoría
-│   ├── usuarios.php         CRUD de usuarios (solo admin)
+│   ├── usuarios.php         CRUD de usuarios (solo admin): crear, rol, activar, reset clave, eliminar
+│   ├── editar_usuario.php   Edición completa de usuario + firma (solo admin)
 │   └── helpers/
 │       └── audit.php        Funciones de log_activity y roles
 │
@@ -118,6 +119,18 @@ Panel de creación de eventos. Responsabilidades:
 - En POST: guarda evento en `eventos`, fechas en `eventos_fechas`, módulos en `eventos_modulos_virtuales`
 - Maneja upload de imagen de portada y adjuntos por modalidad
 - JS dinámico: muestra/oculta campos según modalidad elegida
+
+### `admin/editar_usuario.php` (Fase 1 — 2026-06-11)
+Edición completa de usuarios existentes (acceso `require_role('admin')`):
+- Editables: `nombre`, `email`, `whatsapp`, `rol`, `activo` y `firma_path` (subida opcional)
+- **`usuario` (login) es SOLO LECTURA** en fase 1; `password_hash` no se toca (se mantiene "Reset clave" en `usuarios.php`); tampoco `created_at` ni `last_login_*`
+- Firma: si no se sube nueva, se conserva la actual; si se sube, archivo nuevo (`firma_<time>_<rand>.<ext>` en `uploads/firmas/`) y se actualiza `firma_path`. La firma anterior **no se borra** (fase 2)
+- Validación firma: extensiones png/jpg/jpeg/**webp**, MIME real con `mime_content_type()`, máx 2MB
+- Email validado con `filter_var` y verificación de duplicado contra otros usuarios
+- Protecciones replicadas de `usuarios.php`: no autodesactivarse; no dejar el sistema sin al menos un administrador activo (no quitar rol ni desactivar al último admin)
+- Auditoría con `log_activity('editar_usuario', 'usuario', $id, ...)`
+- **No requiere SQL** (`firma_path VARCHAR(255)` ya existe). **No toca `correo/enviar_correo.php`**, que ya consume `usuarios.firma_path` como firma del comercial asignado
+- `webp` también habilitado en el formulario de creación de `usuarios.php` (consistencia)
 
 ### `admin/editar_evento.php` (Fase 1 — 2026-06-11)
 Edición de eventos ya creados **sin cambiar la URL pública**:
@@ -403,6 +416,12 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 ---
 
 ## 11. Cambios Recientes Detectados
+
+### Rama `feature/editar-usuarios-firma` (2026-06-11)
+- Nuevo `admin/editar_usuario.php` — edición completa de usuario + firma (solo admin, ver sección 4)
+- Botón "✏️ Editar" agregado en `admin/usuarios.php`
+- Soporte `webp` añadido al formulario de creación de usuarios
+- Sin SQL; sin cambios en `correo/enviar_correo.php` (ya consume `usuarios.firma_path`)
 
 ### Rama `feature/editar-eventos` (2026-06-11)
 - Nuevo `admin/editar_evento.php` — edición fase 1 con slug inmutable (ver sección 4)
