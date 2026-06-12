@@ -39,9 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // Validar y subir firma si se envió
             if (!empty($_FILES['firma']['name'])) {
-                $allowed = ['image/png','image/jpeg','image/jpg'];
+                $allowed = ['image/png','image/jpeg','image/jpg','image/webp'];
                 if (!in_array($_FILES['firma']['type'], $allowed)) {
-                    $err = 'La firma debe ser una imagen PNG o JPG.';
+                    $err = 'La firma debe ser una imagen PNG, JPG o WEBP.';
                 } elseif ($_FILES['firma']['size'] > 2*1024*1024) {
                     $err = 'La firma no puede superar los 2MB.';
                 } else {
@@ -214,8 +214,8 @@ include __DIR__ . '/_topbar.php';
       <input type="password" name="clave"  placeholder="Contraseña" required class="p-3 border border-gray-300 rounded-xl">
       <input type="password" name="clave2" placeholder="Repite contraseña" required class="p-3 border border-gray-300 rounded-xl">
       <div class="md:col-span-2">
-        <label class="block mb-2 text-gray-700 font-medium">Firma (PNG/JPG, máx 2MB):</label>
-        <input type="file" name="firma" accept="image/png, image/jpeg" class="p-2 border border-gray-300 rounded-xl w-full">
+        <label class="block mb-2 text-gray-700 font-medium">Firma (PNG/JPG/WEBP, máx 2MB):</label>
+        <input type="file" name="firma" accept="image/png, image/jpeg, image/webp" class="p-2 border border-gray-300 rounded-xl w-full">
       </div>
       <div class="md:col-span-2">
         <button type="submit" class="bg-[#d32f57] hover:bg-[#942934] text-white font-bold px-5 py-3 rounded-xl transition-all">
@@ -277,6 +277,8 @@ include __DIR__ . '/_topbar.php';
               <td class="p-3"><?php echo htmlspecialchars($u['created_at'], ENT_QUOTES, 'UTF-8'); ?></td>
               <td class="p-3">
                 <div class="flex flex-wrap gap-2">
+                  <a href="editar_usuario.php?id=<?php echo (int)$u['id']; ?>"
+                     class="bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg">Editar</a>
                   <form method="POST" class="inline" onsubmit="return confirm('¿Resetear contraseña?');">
                     <input type="hidden" name="accion" value="reset_pass">
                     <input type="hidden" name="id" value="<?php echo (int)$u['id']; ?>">
