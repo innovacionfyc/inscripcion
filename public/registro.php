@@ -97,9 +97,9 @@ while ($stmtf->fetch()) {
 }
 $stmtf->close();
 
-// Curso Especial: módulos virtuales con nombre
+// Curso Especial / Curso Intensivo: módulos virtuales con nombre
 $modulos_virtuales = array();
-if ($mod === 'curso_especial') {
+if ($mod === 'curso_especial' || $mod === 'curso_intensivo') {
   $stmtm = $conn->prepare("
       SELECT id, orden, fecha, hora_inicio, hora_fin, nombre
       FROM eventos_modulos_virtuales
@@ -141,6 +141,11 @@ if ($mod === 'hibrida') {
   } else {
     $fechas = $fechas_presenciales;
   }
+} elseif ($mod === 'curso_intensivo') {
+  $fechas = $fechas_virtuales;
+} elseif ($mod === 'congreso_pv') {
+  // Misma jornada guardada como presencial y virtual: usa una sola para el resumen
+  $fechas = !empty($fechas_presenciales) ? $fechas_presenciales : $fechas_virtuales;
 } elseif ($is_phv) {
   $fechas = $fechas_virtuales;
 } else {
@@ -463,6 +468,44 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $asistencia_tipo = 'HIBRIDO';
     }
     $modulos_csv = '';
+  }
+  // Curso intensivo: curso completo o módulos virtuales seleccionados
+  else if ($mod_form === 'curso_intensivo') {
+    $sel = isset($_POST['curso_intensivo_opcion']) ? strtoupper(trim($_POST['curso_intensivo_opcion'])) : '';
+    if ($sel !== 'INTENSIVO_MODULOS') {
+      $sel = 'INTENSIVO_COMPLETO';
+    }
+
+    // Selección de módulos por ID (misma infraestructura que Curso Especial)
+    $mods_sel = isset($_POST['modulos_virtuales']) && is_array($_POST['modulos_virtuales']) ? $_POST['modulos_virtuales'] : array();
+    $ids_validos = array();
+    $mapMods = array();
+    for ($i = 0; $i < count($modulos_virtuales); $i++) {
+      $mapMods[(int) $modulos_virtuales[$i]['id']] = true;
+    }
+    for ($i = 0; $i < count($mods_sel); $i++) {
+      $id = (int) $mods_sel[$i];
+      if ($id > 0 && isset($mapMods[$id]))
+        $ids_validos[] = $id;
+    }
+    $ids_validos = array_values(array_unique($ids_validos));
+
+    if ($sel === 'INTENSIVO_MODULOS' && !empty($ids_validos)) {
+      $asistencia_tipo = 'INTENSIVO_MODULOS';
+      $modulos_csv = implode(',', $ids_validos);
+    } else {
+      // Fallback seguro: sin módulos marcados queda inscrito a todo el curso
+      $asistencia_tipo = 'INTENSIVO_COMPLETO';
+      $modulos_csv = 'ALL';
+    }
+  }
+  // Congreso presencial/virtual: una sola forma de asistencia a la misma jornada
+  else if ($mod_form === 'congreso_pv') {
+    $asistencia_tipo = isset($_POST['asistencia_tipo']) ? strtoupper(trim($_POST['asistencia_tipo'])) : 'CONG_100_PRESENCIAL';
+    if ($asistencia_tipo !== 'CONG_100_VIRTUAL') {
+      $asistencia_tipo = 'CONG_100_PRESENCIAL';
+    }
+    $modulos_csv = '';
   } else {
     $asistencia_tipo = 'COMPLETO';
     $modulos_csv = '';
@@ -539,6 +582,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $incluye_presencial = true;
       if (in_array($asistencia_tipo, array('CURSO_COMPLETO', 'MODULOS_VIRTUALES', 'CONGRESO_MAS_MODULOS', 'CONG_VIRTUAL', 'CONG_VIRT_MODS')))
         $incluye_virtual = true;
+    } elseif ($mod_form === 'curso_intensivo') {
+      // Curso intensivo: siempre virtual, nunca presencial
+      $incluye_presencial = false;
+      $incluye_virtual = true;
+    } elseif ($mod_form === 'congreso_pv') {
+      // Una sola forma de asistencia: presencial o virtual
+      $incluye_presencial = ($asistencia_tipo === 'CONG_100_PRESENCIAL');
+      $incluye_virtual = ($asistencia_tipo === 'CONG_100_VIRTUAL');
     } else {
       // Híbrida: si el inscrito eligió 100% virtual (HIB_VIRTUAL), no incluye presencial
       $incluye_presencial = ($mod_form === 'presencial' || ($mod_form === 'hibrida' && $asistencia_tipo !== 'HIB_VIRTUAL'));
@@ -579,10 +630,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $firma_url_public = base_url('uploads/firmas/' . $evento['firma_imagen']);
     }
 
-    // Texto humano de módulos para Curso Especial
+    // Texto humano de módulos para Curso Especial / Curso Intensivo
     $modulos_human = '';
-    if ($mod_form === 'curso_especial') {
-      if ($asistencia_tipo === 'CURSO_COMPLETO' || $asistencia_tipo === 'CONG_VIRT_MODS') {
+    if ($mod_form === 'curso_especial' || $mod_form === 'curso_intensivo') {
+      if ($asistencia_tipo === 'CURSO_COMPLETO' || $asistencia_tipo === 'CONG_VIRT_MODS' || $asistencia_tipo === 'INTENSIVO_COMPLETO') {
         $parts = array();
         for ($i = 0; $i < count($modulos_virtuales); $i++) {
           $m = $modulos_virtuales[$i];
@@ -838,6 +889,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           </div>
         <?php endif; ?>
 
+        <?php if ($mod === 'curso_intensivo' && !empty($modulos_virtuales)): ?>
+          <div class="grid grid-cols-1 gap-4 mb-4">
+            <div class="p-4 border border-gray-300 rounded-xl bg-white">
+              <div class="font-bold text-[#942934] mb-2">💻 Módulos virtuales</div>
+              <?php echo pintarModulosVirtualesHtml($modulos_virtuales); ?>
+            </div>
+          </div>
+        <?php endif; ?>
+
+        <?php if ($mod === 'congreso_pv'): ?>
+          <div class="grid grid-cols-1 gap-4 mb-4">
+            <div class="p-4 border border-gray-300 rounded-xl bg-white">
+              <div class="font-bold text-[#942934] mb-2">
+                📅 <?php echo htmlspecialchars($label_presencial, ENT_QUOTES, 'UTF-8'); ?> — Jornada académica
+              </div>
+              <?php echo pintarFechasHtml($fechas); ?>
+            </div>
+          </div>
+        <?php endif; ?>
+
         <?php if (!empty($evento['autoestudio']) && (int) $evento['autoestudio'] === 1): ?>
           <div class="mb-4 p-4 border border-gray-300 rounded-xl bg-green-50">
             <div class="font-bold text-green-800">✅ Este evento incluye Autoestudio</div>
@@ -1039,6 +1110,83 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             </div>
           <?php endif; ?>
 
+          <?php if ($mod === 'curso_intensivo'): ?>
+            <div class="p-4 border border-gray-300 rounded-xl">
+              <div class="font-semibold text-gray-800 mb-3">Seleccione su opción</div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                  <input type="radio" name="curso_intensivo_opcion" value="INTENSIVO_COMPLETO" class="accent-[#942934]" checked>
+                  <div>
+                    <div class="font-semibold">Curso intensivo completo</div>
+                    <div class="text-sm text-gray-600">Participa en todo el curso</div>
+                  </div>
+                </label>
+
+                <?php if (!empty($modulos_virtuales)): ?>
+                  <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="curso_intensivo_opcion" value="INTENSIVO_MODULOS" class="accent-[#942934]">
+                    <div>
+                      <div class="font-semibold">Módulos virtuales</div>
+                      <div class="text-sm text-gray-600">Seleccione uno o más módulos</div>
+                    </div>
+                  </label>
+                <?php endif; ?>
+              </div>
+
+              <div id="wrap_modulos_ci" class="mt-4 hidden">
+                <div class="font-semibold text-gray-800 mb-2">Elija sus módulos virtuales</div>
+
+                <?php if (!empty($modulos_virtuales)): ?>
+                  <div class="space-y-2">
+                    <?php for ($i = 0; $i < count($modulos_virtuales); $i++):
+                      $m = $modulos_virtuales[$i];
+                      $fechaTxt = date('d/m/Y', strtotime($m['fecha']));
+                      ?>
+                      <label class="flex gap-2 items-start p-3 border border-gray-200 rounded-xl">
+                        <input type="checkbox" name="modulos_virtuales[]" value="<?php echo (int) $m['id']; ?>"
+                          class="accent-[#942934] mt-1">
+                        <div>
+                          <div class="font-semibold text-gray-900">
+                            <?php echo htmlspecialchars($m['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                          </div>
+                          <div class="text-sm text-gray-700">Fecha: <?php echo $fechaTxt; ?></div>
+                        </div>
+                      </label>
+                    <?php endfor; ?>
+                  </div>
+                  <div class="text-xs text-gray-500 mt-2">Seleccione al menos un módulo.</div>
+                <?php else: ?>
+                  <div class="text-sm text-gray-600">Este evento aún no tiene módulos virtuales configurados.</div>
+                <?php endif; ?>
+              </div>
+            </div>
+          <?php endif; ?>
+
+          <?php if ($mod === 'congreso_pv'): ?>
+            <div class="p-4 border border-gray-300 rounded-xl">
+              <div class="font-semibold text-gray-800 mb-3">Seleccione su tipo de asistencia</div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                  <input type="radio" name="asistencia_tipo" value="CONG_100_PRESENCIAL" class="accent-[#942934]" checked>
+                  <div>
+                    <div class="font-semibold">100% presencial</div>
+                    <div class="text-sm text-gray-600">Participa en toda la jornada académica presencial</div>
+                  </div>
+                </label>
+
+                <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                  <input type="radio" name="asistencia_tipo" value="CONG_100_VIRTUAL" class="accent-[#942934]">
+                  <div>
+                    <div class="font-semibold">100% virtual</div>
+                    <div class="text-sm text-gray-600">Participa en toda la jornada académica virtual</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          <?php endif; ?>
+
           <?php if (!$is_phv): ?>
           <input type="file" name="soporte_pago" accept=".pdf,image/*"
             class="w-full p-3 border border-gray-300 rounded-xl placeholder:text-gray-500" />
@@ -1151,6 +1299,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
       }
 
+      // Validación Curso Intensivo: módulos obligatorios si eligió "Módulos virtuales"
+      if (MODALIDAD === 'curso_intensivo') {
+        var radiosCI = document.getElementsByName('curso_intensivo_opcion');
+        var selCI = 'INTENSIVO_COMPLETO';
+        for (var k = 0; k < radiosCI.length; k++) {
+          if (radiosCI[k].checked) selCI = radiosCI[k].value;
+        }
+        if (selCI === 'INTENSIVO_MODULOS') {
+          var wrapCI = document.getElementById('wrap_modulos_ci');
+          if (wrapCI) {
+            var checksCI = wrapCI.querySelectorAll('input[type="checkbox"]:checked');
+            if (!checksCI || checksCI.length === 0) {
+              alert('Por favor selecciona al menos un módulo virtual.');
+              if (evt && evt.preventDefault) evt.preventDefault();
+              return false;
+            }
+          }
+        }
+      }
+
       var btn = document.querySelector('button[type="submit"]');
       if (btn) {
         btn.disabled = true;
@@ -1223,6 +1391,35 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         radios[i].addEventListener('change', toggleModulos);
       }
       toggleModulos();
+    })();
+
+    // Curso Intensivo: mostrar/ocultar selección de módulos
+    (function () {
+      var MODALIDAD = "<?php echo addslashes($mod); ?>";
+      if (MODALIDAD !== 'curso_intensivo') return;
+
+      var wrap = document.getElementById('wrap_modulos_ci');
+      var radios = document.getElementsByName('curso_intensivo_opcion');
+      if (!wrap || !radios || radios.length === 0) return;
+
+      function toggleCI() {
+        var sel = 'INTENSIVO_COMPLETO';
+        for (var i = 0; i < radios.length; i++) {
+          if (radios[i].checked) sel = radios[i].value;
+        }
+        if (sel === 'INTENSIVO_MODULOS') {
+          wrap.classList.remove('hidden');
+        } else {
+          wrap.classList.add('hidden');
+          var checks = wrap.querySelectorAll('input[type="checkbox"]');
+          for (var j = 0; j < checks.length; j++) checks[j].checked = false;
+        }
+      }
+
+      for (var i = 0; i < radios.length; i++) {
+        radios[i].addEventListener('change', toggleCI);
+      }
+      toggleCI();
     })();
 
     // Curso Especial: mostrar/ocultar selección de módulos

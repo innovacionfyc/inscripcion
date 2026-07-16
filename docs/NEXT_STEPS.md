@@ -1,13 +1,20 @@
 # NEXT_STEPS — Estado actual y próximos pasos
 
-> Complementa `INSCRIPCION_CONTEXT.md`. Actualizado: 2026-06-11.
+> Complementa `INSCRIPCION_CONTEXT.md`. Actualizado: 2026-07-16.
 
 ---
 
 ## Estado Actual del Proyecto
 
-- Rama activa de desarrollo: `feature/editar-usuarios-firma` (basada en `main` `7718ca3`)
-- Último commit en main: `7718ca3` — "Merge pull request #5 (opciones híbridas + edición de eventos)"
+- Rama activa de desarrollo: `feature/opciones-curso-intensivo-congreso-pv` (basada en `main` `c84d1a7`)
+- Último commit en main: `c84d1a7` — "Merge branch 'feature/editar-usuarios-firma'"
+- **Nuevo (2026-07-16): modalidades Curso Intensivo y Congreso presencial/virtual** (en desarrollo en esta rama):
+  - `Curso_Intensivo` ("Curso intensivo"): solo curso, 100% virtual, con módulos virtuales. Inscrito elige `INTENSIVO_COMPLETO` (todo el curso, módulos=ALL) o `INTENSIVO_MODULOS` (CSV de IDs); fallback seguro a completo
+  - `Congreso_PV` ("Congreso presencial/virtual"): misma jornada académica, el inscrito escoge UNA forma de asistir: `CONG_100_PRESENCIAL` o `CONG_100_VIRTUAL`. Sin módulos, sin opción combinada, sin la palabra "híbrido"
+  - **No requiere SQL**: códigos nuevos caben en `asistencia_tipo VARCHAR(25)`; `modalidad` es `VARCHAR(50)`
+  - Curso Especial conserva sus 6 opciones y Híbrida no cambia de comportamiento
+  - Exportes XLS y vista de inscritos ahora muestran etiquetas humanas para todos los códigos (antes CE/Híbrida salían como "—")
+  - **Pruebas locales necesarias antes de merge**: crear un evento de cada modalidad nueva, inscribirse con cada opción (4 combinaciones), revisar correo al inscrito y aviso al comercial (modo `MAIL_DEBUG`), revisar vista de inscritos y export XLS, y verificar que un evento Curso Especial e Híbrida existentes siguen mostrando sus opciones de siempre
 - **Nuevo (2026-06-11): edición de usuarios — Fase 1** (`admin/editar_usuario.php` + botón en `admin/usuarios.php`):
   - Editables: nombre, email, whatsapp, rol, activo y firma (subida opcional)
   - `usuario` (login) **solo lectura**; contraseña sin cambios aquí (se mantiene "Reset clave")
@@ -23,11 +30,13 @@
   - Adjuntos: solo agregar; eliminar adjuntos existentes queda para **fase 2**
   - **No requirió SQL**
 - El sistema está funcional y en producción (`https://inscripcion.fycconsultores.com/public/`)
-- El formulario de inscripción maneja **5 modalidades**:
+- El formulario de inscripción maneja **7 modalidades**:
   - `Presencial` — con tipo Congreso/Seminario
   - `Virtual` — COMPLETO o por MODULOS
   - `Hibrida` — con tipo Congreso/Seminario + **selección del inscrito: HIBRIDO (default) o HIB_VIRTUAL**
   - `Curso_Especial` — hasta 6 opciones: 4 presenciales + 2 virtuales (según `congreso_virtual`)
+  - `Curso_Intensivo` — 2 opciones: INTENSIVO_COMPLETO (default) o INTENSIVO_MODULOS
+  - `Congreso_PV` — 2 opciones: CONG_100_PRESENCIAL (default) o CONG_100_VIRTUAL
   - `Públicamente Hablando (Virtual)` — modalidad gratuita, sin soporte de pago
 - Los correos al inscrito y al comercial se envían correctamente vía PHPMailer + SMTP Gmail Relay
 - **Schema real verificado en BD local** (ver sección de BD más abajo)
@@ -37,6 +46,7 @@
 - ✅ `docs/sql/2026_05_22_add_url_conexion_eventos.sql` — aplicada en LOCAL y PRODUCCIÓN
 - ✅ `docs/sql/2026_06_03_congreso_virtual_curso_especial.sql` — **aplicada en LOCAL y PRODUCCIÓN** (ya no está pendiente)
 - ✅ `feature/opciones-inscripcion-hibrida` — **NO requiere SQL**: los códigos `HIBRIDO` (7) y `HIB_VIRTUAL` (11) caben en `asistencia_tipo VARCHAR(25)` ya existente en ambas BD
+- ✅ `feature/opciones-curso-intensivo-congreso-pv` — **NO requiere SQL**: `INTENSIVO_COMPLETO` (18), `INTENSIVO_MODULOS` (17), `CONG_100_PRESENCIAL` (19) y `CONG_100_VIRTUAL` (16) caben en `asistencia_tipo VARCHAR(25)`; las modalidades nuevas caben en `modalidad VARCHAR(50)`; no se tocó ningún ENUM
 
 > Nota: existe una rama local pausada `feature/diplomado-curso-especial` (commit `9242e4e`)
 > con su propia migración (`2026_06_11_diplomado_tipo_evento_presencial.sql`, aplicada solo
@@ -174,10 +184,11 @@ Solo se crearon dos archivos nuevos de documentación:
 
 ---
 
-## Notas para Claude / ChatGPT en Futuras Sesiones
+## Notas para Futuras Sesiones de Trabajo
 
 - Leer `INSCRIPCION_CONTEXT.md` al inicio de cada sesión para reconstruir contexto
 - La modalidad `curso_especial` es la más compleja: tiene lógica propia en registro, creación y correos
+- Las modalidades `curso_intensivo` y `congreso_pv` (2026-07-16) tienen ramas propias en registro, creación, edición y correos; no comparten códigos de asistencia con CE ni Híbrida
 - La modalidad `Públicamente Hablando (Virtual)` es gratuita: sin soporte de pago, sin "Tenga en cuenta"
 - `norm_modalidad()` es el punto de verdad para comparar modalidades: siempre usarlo
 - Los tipos ENUM reales en BD: `tipo_evento_presencial ENUM('Congreso','Seminario')`, `whatsapp_consent ENUM('SI','NO')`, `usuarios.rol ENUM('admin','editor')`

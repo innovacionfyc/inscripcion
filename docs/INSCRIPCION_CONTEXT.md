@@ -1,7 +1,7 @@
 # Contexto del Proyecto: Inscripción a Eventos F&C Consultores
 
-> **Documento de contexto técnico** para trabajo coordinado entre Claude / ChatGPT y el equipo de desarrollo.
-> Actualizado: 2026-06-03. Solo lectura / análisis. No ejecutar ni modificar desde este archivo.
+> **Documento de contexto técnico** interno del equipo de desarrollo.
+> Actualizado: 2026-07-16. Solo lectura / análisis. No ejecutar ni modificar desde este archivo.
 
 ---
 
@@ -298,6 +298,42 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 - `modulos_seleccionados` en `inscritos`: CSV de IDs, `'ALL'` para todos, o `''` para solo congreso
 - `inscritos.asistencia_tipo VARCHAR(25)` — CONG_VIRTUAL=12, CONG_VIRT_MODS=14, CONGRESO_MAS_MODULOS=20
 
+### `curso_intensivo` (2026-07-16)
+- Valor en BD del select de admin: `Curso_Intensivo` (visible: "Curso intensivo")
+- Evento que es **solo curso** (sin congreso): 100% virtual, con módulos virtuales con nombre
+- Reutiliza la infraestructura de módulos de Curso Especial (`eventos_modulos_virtuales`, máx 10)
+- En admin se muestra el bloque de módulos **sin** los checkboxes de tipo de congreso
+- Las fechas generales del evento se guardan con `tipo='virtual'` en `eventos_fechas`
+- **Selección del inscrito** (2 opciones, radio `curso_intensivo_opcion`):
+
+| Opción | Valor `asistencia_tipo` | `modulos_seleccionados` | `incluye_presencial` | `incluye_virtual` |
+|--------|------------------------|------------------------|---------------------|------------------|
+| Curso intensivo completo — default | `INTENSIVO_COMPLETO` (18) | `ALL` | NO | SI |
+| Módulos virtuales | `INTENSIVO_MODULOS` (17) | CSV de IDs válidos | NO | SI |
+
+- Fallback seguro en POST: si eligió módulos pero no marcó ninguno válido → `INTENSIVO_COMPLETO` + `ALL`
+- Correo: agenda "💻 Agenda (Módulos virtuales)" (todos o los seleccionados); sin lugar ni guía hotelera; URL de conexión si existe
+- Sin SQL: los códigos caben en `asistencia_tipo VARCHAR(25)` y `modalidad` es `VARCHAR(50)`
+
+### `congreso_pv` (2026-07-16)
+- Valor en BD del select de admin: `Congreso_PV` (visible: "Congreso presencial/virtual")
+- Congreso donde el inscrito escoge **una sola** forma de asistir a la **misma jornada académica**
+- NO existe opción "presencial + virtual" y NO hay módulos virtuales; no se usa la palabra "híbrido"
+- `tipo_evento_presencial` aplica (Congreso/Seminario); lugar personalizado y adjuntos presencial+virtual disponibles
+- Las fechas de la jornada se guardan duplicadas con `tipo='presencial'` y `tipo='virtual'` en `eventos_fechas` (como CE con ambas banderas)
+- **Selección del inscrito** (2 opciones, radio `asistencia_tipo`):
+
+| Opción | Valor `asistencia_tipo` | `incluye_presencial` | `incluye_virtual` |
+|--------|------------------------|---------------------|------------------|
+| 100% presencial — default | `CONG_100_PRESENCIAL` (19) | SI | NO |
+| 100% virtual | `CONG_100_VIRTUAL` (16) | NO | SI |
+
+- `modulos_seleccionados` siempre `''`
+- `CONG_100_PRESENCIAL`: con lugar (y guía hotelera si usa lugar por defecto)
+- `CONG_100_VIRTUAL`: sin lugar ni guía hotelera; con URL de conexión si existe
+- Los códigos son distintos de `CONGRESO`/`CONG_VIRTUAL` (Curso Especial) a propósito, para no confundir etiquetas en correos y exportes
+- Sin SQL: los códigos caben en `asistencia_tipo VARCHAR(25)`
+
 ---
 
 ## 9. Tablas de Base de Datos (Inferidas del Código)
@@ -362,7 +398,7 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 | email_corporativo | VARCHAR | Destinatario principal del correo |
 | medio | VARCHAR | Cómo se enteró del evento |
 | soporte_pago | VARCHAR NULL | Ruta relativa en `uploads/soportes/` |
-| asistencia_tipo | VARCHAR(25) | COMPLETO, MODULOS, CONGRESO, CURSO_COMPLETO, MODULOS_VIRTUALES, CONGRESO_MAS_MODULOS, CONG_VIRTUAL, CONG_VIRT_MODS, HIBRIDO, HIB_VIRTUAL |
+| asistencia_tipo | VARCHAR(25) | COMPLETO, MODULOS, CONGRESO, CURSO_COMPLETO, MODULOS_VIRTUALES, CONGRESO_MAS_MODULOS, CONG_VIRTUAL, CONG_VIRT_MODS, HIBRIDO, HIB_VIRTUAL, INTENSIVO_COMPLETO, INTENSIVO_MODULOS, CONG_100_PRESENCIAL, CONG_100_VIRTUAL |
 | modulos_seleccionados | VARCHAR NULL | CSV de IDs, "ALL", o vacío |
 | whatsapp_consent | **ENUM('SI','NO')** NULL | |
 | fecha_registro | DATETIME | Timestamp de registro |
@@ -416,6 +452,16 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 ---
 
 ## 11. Cambios Recientes Detectados
+
+### Rama `feature/opciones-curso-intensivo-congreso-pv` (2026-07-16)
+- Dos modalidades nuevas: `Curso_Intensivo` ("Curso intensivo") y `Congreso_PV` ("Congreso presencial/virtual") — ver sección 8
+- Códigos nuevos de `asistencia_tipo`: `INTENSIVO_COMPLETO`, `INTENSIVO_MODULOS`, `CONG_100_PRESENCIAL`, `CONG_100_VIRTUAL` — todos caben en `VARCHAR(25)`, **sin SQL**
+- `admin/crear_evento.php`: opciones nuevas en el select de modalidad; Curso Intensivo muestra módulos sin checkboxes de congreso; Congreso P/V pide tipo presencial, lugar y guarda la jornada como presencial+virtual
+- `admin/editar_evento.php`: booleanos extendidos (`$es_ci`, `$es_cpv`, `$gestiona_modulos`) — Curso Intensivo gestiona módulos igual que CE; slug y modalidad siguen inmutables
+- `public/registro.php`: ramas de render y POST propias para cada modalidad nueva; fallbacks seguros; las modalidades existentes no cambian
+- `correo/enviar_correo.php`: etiquetas humanas para los 4 códigos nuevos en resumen, agenda, AltBody y aviso al comercial
+- `admin/inscritos.php` y `admin/evento_export_xls.php`: `format_asistencia()`/`asistencia_humana()` ahora traducen también los códigos de CE, Híbrida y los nuevos (antes salían como "—")
+- **No se tocaron**: Curso Especial (6 opciones intactas), Híbrida (igual), archivos backup `*_FUNCIONA.php`, `evento_export.php` (CSV sin columna de asistencia, igual que antes)
 
 ### Rama `feature/editar-usuarios-firma` (2026-06-11)
 - Nuevo `admin/editar_usuario.php` — edición completa de usuario + firma (solo admin, ver sección 4)
