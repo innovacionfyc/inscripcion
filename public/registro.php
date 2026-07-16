@@ -890,7 +890,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         <?php endif; ?>
 
         <?php if ($mod === 'curso_intensivo'): ?>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div class="space-y-4 mb-4">
             <?php if (!empty($fechas)): ?>
               <div class="p-4 border border-gray-300 rounded-xl bg-white">
                 <div class="font-bold text-[#942934] mb-2">📅 Sesiones del curso</div>
