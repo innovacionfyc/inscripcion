@@ -889,12 +889,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           </div>
         <?php endif; ?>
 
-        <?php if ($mod === 'curso_intensivo' && !empty($modulos_virtuales)): ?>
-          <div class="grid grid-cols-1 gap-4 mb-4">
-            <div class="p-4 border border-gray-300 rounded-xl bg-white">
-              <div class="font-bold text-[#942934] mb-2">💻 Módulos virtuales</div>
-              <?php echo pintarModulosVirtualesHtml($modulos_virtuales); ?>
-            </div>
+        <?php if ($mod === 'curso_intensivo'): ?>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <?php if (!empty($fechas)): ?>
+              <div class="p-4 border border-gray-300 rounded-xl bg-white">
+                <div class="font-bold text-[#942934] mb-2">📅 Sesiones del curso</div>
+                <?php echo pintarFechasHtml($fechas); ?>
+              </div>
+            <?php endif; ?>
+            <?php if (!empty($modulos_virtuales)): ?>
+              <div class="p-4 border border-gray-300 rounded-xl bg-white">
+                <div class="font-bold text-[#942934] mb-2">💻 Módulos virtuales</div>
+                <?php echo pintarModulosVirtualesHtml($modulos_virtuales); ?>
+              </div>
+            <?php endif; ?>
           </div>
         <?php endif; ?>
 
