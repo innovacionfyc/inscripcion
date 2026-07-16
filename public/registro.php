@@ -893,14 +893,51 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           <div class="space-y-4 mb-4">
             <?php if (!empty($fechas)): ?>
               <div class="p-4 border border-gray-300 rounded-xl bg-white">
-                <div class="font-bold text-[#942934] mb-2">📅 Sesiones del curso</div>
-                <?php echo pintarFechasHtml($fechas); ?>
+                <div class="font-bold text-[#942934] mb-3">📅 Sesiones del curso</div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <?php
+                  $meses_ci = array('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre');
+                  for ($i = 0; $i < count($fechas); $i++):
+                    $f_ci = $fechas[$i];
+                    $dia_ci = (int) date('j', strtotime($f_ci['fecha']));
+                    $mes_ci = $meses_ci[(int) date('n', strtotime($f_ci['fecha'])) - 1];
+                    $anio_ci = date('Y', strtotime($f_ci['fecha']));
+                    $hi_ci = str_replace(array('am', 'pm'), array('a. m.', 'p. m.'), strtolower(date('g:i a', strtotime($f_ci['fecha'] . ' ' . $f_ci['hora_inicio']))));
+                    $hf_ci = str_replace(array('am', 'pm'), array('a. m.', 'p. m.'), strtolower(date('g:i a', strtotime($f_ci['fecha'] . ' ' . $f_ci['hora_fin']))));
+                    ?>
+                    <div class="p-3 border border-gray-200 rounded-xl">
+                      <div class="font-semibold text-gray-800 text-sm">
+                        Día <?php echo $i + 1; ?> — <?php echo $dia_ci . ' de ' . $mes_ci . ' de ' . $anio_ci; ?>
+                      </div>
+                      <div class="text-sm text-gray-600 mt-1"><?php echo $hi_ci; ?> a <?php echo $hf_ci; ?></div>
+                    </div>
+                  <?php endfor; ?>
+                </div>
               </div>
             <?php endif; ?>
+
             <?php if (!empty($modulos_virtuales)): ?>
               <div class="p-4 border border-gray-300 rounded-xl bg-white">
-                <div class="font-bold text-[#942934] mb-2">💻 Módulos virtuales</div>
-                <?php echo pintarModulosVirtualesHtml($modulos_virtuales); ?>
+                <div class="font-bold text-[#942934] mb-3">💻 Módulos virtuales</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <?php for ($i = 0; $i < count($modulos_virtuales); $i++):
+                    $m_ci = $modulos_virtuales[$i];
+                    $mfecha_ci = date('d/m/Y', strtotime($m_ci['fecha']));
+                    $mhor_ci = '';
+                    if (!empty($m_ci['hora_inicio']) && !empty($m_ci['hora_fin'])) {
+                      $mhi_ci = str_replace(array('am', 'pm'), array('a. m.', 'p. m.'), strtolower(date('g:i a', strtotime($m_ci['fecha'] . ' ' . $m_ci['hora_inicio']))));
+                      $mhf_ci = str_replace(array('am', 'pm'), array('a. m.', 'p. m.'), strtolower(date('g:i a', strtotime($m_ci['fecha'] . ' ' . $m_ci['hora_fin']))));
+                      $mhor_ci = ' — ' . $mhi_ci . ' a ' . $mhf_ci;
+                    }
+                    ?>
+                    <div class="p-3 border border-gray-200 rounded-xl">
+                      <div class="font-semibold text-gray-900 text-sm">
+                        <?php echo htmlspecialchars($m_ci['nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                      </div>
+                      <div class="text-sm text-gray-600 mt-1"><?php echo $mfecha_ci . $mhor_ci; ?></div>
+                    </div>
+                  <?php endfor; ?>
+                </div>
               </div>
             <?php endif; ?>
           </div>
