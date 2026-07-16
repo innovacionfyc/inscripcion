@@ -262,6 +262,18 @@ class CorreoDenuncia
                 'CONG_VIRT_MODS' => 'Opción 6: Curso completo virtual',
             ];
             $line1 = $map[$asistencia_tipo] ?? ('Selección: ' . $this->h($asistencia_tipo));
+        } elseif ($modalidadLow === 'curso_intensivo') {
+            $map = [
+                'INTENSIVO_COMPLETO' => 'Curso intensivo completo',
+                'INTENSIVO_MODULOS' => 'Módulos virtuales',
+            ];
+            $line1 = 'Asistencia: ' . ($map[$asistencia_tipo] ?? 'Curso intensivo completo');
+        } elseif ($modalidadLow === 'congreso_pv') {
+            $map = [
+                'CONG_100_PRESENCIAL' => '100% presencial',
+                'CONG_100_VIRTUAL' => '100% virtual',
+            ];
+            $line1 = 'Asistencia: ' . ($map[$asistencia_tipo] ?? '100% presencial');
         } else {
             if ($asistencia_tipo === 'HIBRIDO') {
                 $line1 = 'Asistencia: Híbrido (presencial + virtual)';
@@ -548,6 +560,32 @@ class CorreoDenuncia
 
                     $virt = $this->getEventoFechas($evento_id, 'virtual');
                     $agendaHtml .= $this->buildBox('💻 Agenda (Virtual)', $this->buildListaFechasHtml($virt, 'Día'));
+                } elseif ($modalidadLowNorm === 'curso_intensivo') {
+                    // Curso intensivo: agenda = módulos virtuales (todos o los seleccionados)
+                    $asist = strtoupper(trim((string) ($data['asistencia_tipo'] ?? '')));
+                    $modsCsv = (string) ($data['modulos_fechas'] ?? '');
+
+                    if ($asist === 'INTENSIVO_MODULOS' && $modsCsv !== '' && strtoupper($modsCsv) !== 'ALL') {
+                        $mods = $this->getCursoEspecialModulos($evento_id, $modsCsv);
+                    } else {
+                        $mods = $this->getCursoEspecialModulos($evento_id, 'ALL');
+                    }
+                    $agendaHtml .= $this->buildBox('💻 Agenda (Módulos virtuales)', $this->buildListaModulosCEHtml($mods));
+                } elseif ($modalidadLowNorm === 'congreso_pv') {
+                    // Congreso presencial/virtual: misma jornada, solo cambia la forma de asistencia
+                    $asist = strtoupper(trim((string) ($data['asistencia_tipo'] ?? '')));
+
+                    if ($asist === 'CONG_100_VIRTUAL') {
+                        $rows = $this->getEventoFechas($evento_id, 'virtual');
+                        if (empty($rows))
+                            $rows = $this->getEventoFechas($evento_id, 'presencial');
+                        $agendaHtml .= $this->buildBox('💻 Agenda (Virtual)', $this->buildListaFechasHtml($rows, 'Día'));
+                    } else {
+                        $rows = $this->getEventoFechas($evento_id, 'presencial');
+                        if (empty($rows))
+                            $rows = $this->getEventoFechas($evento_id, 'virtual');
+                        $agendaHtml .= $this->buildBox('📍 Agenda (Presencial)', $this->buildListaFechasHtml($rows, 'Día'));
+                    }
                 } else {
                     // comportamiento original: si el usuario eligió MODULOS (virtual clásico), mostrar solo esos
                     $detalleHorarioFinal = $detalleHorario;
@@ -762,10 +800,14 @@ class CorreoDenuncia
             $altModalidad = $data['modalidad'] ?? '';
             $altResumen = strip_tags((string) $resumenFechas);
             $altSel = $data['asistencia_tipo'] ?? '';
-            // Texto plano legible para la selección de modalidad Híbrida
+            // Texto plano legible para la selección (Híbrida, Curso Intensivo, Congreso P/V)
             $mapAltSel = [
                 'HIBRIDO' => 'Híbrido (presencial + virtual)',
                 'HIB_VIRTUAL' => '100% virtual',
+                'INTENSIVO_COMPLETO' => 'Curso intensivo completo',
+                'INTENSIVO_MODULOS' => 'Módulos virtuales',
+                'CONG_100_PRESENCIAL' => '100% presencial',
+                'CONG_100_VIRTUAL' => '100% virtual',
             ];
             if (isset($mapAltSel[$altSel])) {
                 $altSel = $mapAltSel[$altSel];
@@ -875,8 +917,16 @@ class CorreoDenuncia
                 'HIBRIDO' => 'Híbrido (presencial + virtual)',
                 'HIB_VIRTUAL' => '100% virtual',
             ];
+            // Curso Intensivo y Congreso presencial/virtual: selección del inscrito
+            $mapCiCpv = [
+                'INTENSIVO_COMPLETO' => 'Curso intensivo completo',
+                'INTENSIVO_MODULOS' => 'Módulos virtuales',
+                'CONG_100_PRESENCIAL' => '100% presencial',
+                'CONG_100_VIRTUAL' => '100% virtual',
+            ];
             $selNice = isset($mapCE[$asist]) ? $mapCE[$asist]
-                : (isset($mapHib[$asist]) ? $mapHib[$asist] : ($asist ?: 'COMPLETO'));
+                : (isset($mapHib[$asist]) ? $mapHib[$asist]
+                    : (isset($mapCiCpv[$asist]) ? $mapCiCpv[$asist] : ($asist ?: 'COMPLETO')));
 
             $tags = [];
             if ($incluyeP)

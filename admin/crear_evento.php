@@ -95,7 +95,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
   // ✅ NUEVO: Tipo evento presencial (Congreso/Seminario) - solo si modalidad tiene presencial
   $tipo_evento_presencial = null;
-  if ($modLow === 'presencial' || $modLow === 'hibrida' || $modLow === 'curso_especial') {
+  if ($modLow === 'presencial' || $modLow === 'hibrida' || $modLow === 'curso_especial' || $modLow === 'congreso_pv') {
     $tmpTipo = trim($_POST['tipo_evento_presencial'] ?? '');
     if ($tmpTipo === 'Congreso' || $tmpTipo === 'Seminario') {
       $tipo_evento_presencial = $tmpTipo;
@@ -119,7 +119,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   // Lugar personalizado: aplica si hay bloque presencial
   $cambiar_lugar = isset($_POST['cambiar_lugar']) ? strtoupper(trim($_POST['cambiar_lugar'])) : 'NO';
   $lugar_personalizado = null;
-  if (($modLow === 'presencial' || $modLow === 'hibrida' || ($modLow === 'curso_especial' && $congreso_presencial === 1)) && $cambiar_lugar === 'SI') {
+  if (($modLow === 'presencial' || $modLow === 'hibrida' || $modLow === 'congreso_pv' || ($modLow === 'curso_especial' && $congreso_presencial === 1)) && $cambiar_lugar === 'SI') {
     $lugar_personalizado = trim($_POST['lugar_personalizado'] ?? '');
     if ($lugar_personalizado === '')
       $lugar_personalizado = null;
@@ -200,12 +200,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $hin = $_POST["hora_inicio"] ?? [];
       $hfin = $_POST["hora_fin"] ?? [];
 
-      if ($modLow === 'curso_especial') {
+      if ($modLow === 'curso_especial' || $modLow === 'congreso_pv') {
         // CE: guardar las fechas del congreso para cada tipo activo
+        // Congreso presencial/virtual: la misma jornada queda disponible en ambas formas de asistencia
         $tiposCE = array();
-        if ($congreso_presencial === 1) $tiposCE[] = 'presencial';
-        if ($congreso_virtual === 1)    $tiposCE[] = 'virtual';
-        if (empty($tiposCE))           $tiposCE[] = 'presencial'; // fallback
+        if ($modLow === 'congreso_pv') {
+          $tiposCE = array('presencial', 'virtual');
+        } else {
+          if ($congreso_presencial === 1) $tiposCE[] = 'presencial';
+          if ($congreso_virtual === 1)    $tiposCE[] = 'virtual';
+          if (empty($tiposCE))           $tiposCE[] = 'presencial'; // fallback
+        }
 
         foreach ($tiposCE as $tipoNormal) {
           for ($i = 0; $i < count($fechas); $i++) {
@@ -218,7 +223,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
           }
         }
       } else {
-        $tipoNormal = ($modLow === 'presencial') ? 'presencial' : (($modLow === 'virtual' || $modLow === 'públicamente hablando (virtual)') ? 'virtual' : 'general');
+        $tipoNormal = ($modLow === 'presencial') ? 'presencial' : (($modLow === 'virtual' || $modLow === 'públicamente hablando (virtual)' || $modLow === 'curso_intensivo') ? 'virtual' : 'general');
 
         for ($i = 0; $i < count($fechas); $i++) {
           $tipo = $tipoNormal;
@@ -234,10 +239,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $stmt_fecha->close();
 
     // =========================================================
-    // 2) Curso Especial: Guardar Módulos Virtuales (máx 10)
-    //    en eventos_modulos_virtuales
+    // 2) Curso Especial / Curso Intensivo: Guardar Módulos
+    //    Virtuales (máx 10) en eventos_modulos_virtuales
     // =========================================================
-    if ($modLow === 'curso_especial') {
+    if ($modLow === 'curso_especial' || $modLow === 'curso_intensivo') {
       $mods_fecha = $_POST['modulos_fecha'] ?? [];
       $mods_hi = $_POST['modulos_hora_inicio'] ?? [];
       $mods_hf = $_POST['modulos_hora_fin'] ?? [];
@@ -312,13 +317,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
       $destP = $baseDocs . '/evento_presencial/' . (int) $evento_id;
       guardarAdjuntos('docs_presencial', $destP);
-    } elseif ($modLow === 'curso_especial') {
-      // En Curso Especial dejamos adjuntar ambos (porque hay congreso + módulos virtuales)
+    } elseif ($modLow === 'curso_especial' || $modLow === 'congreso_pv') {
+      // Curso Especial y Congreso presencial/virtual: permiten adjuntar ambos tipos
       $destV = $baseDocs . '/evento_virtual/' . (int) $evento_id;
       guardarAdjuntos('docs_virtual', $destV);
 
       $destP = $baseDocs . '/evento_presencial/' . (int) $evento_id;
       guardarAdjuntos('docs_presencial', $destP);
+    } elseif ($modLow === 'curso_intensivo') {
+      // Curso intensivo: 100% virtual (curso completo o módulos)
+      $dest = $baseDocs . '/evento_virtual/' . (int) $evento_id;
+      guardarAdjuntos('docs_virtual', $dest);
     }
 
     // Compatibilidad (tus flags)
@@ -473,6 +482,8 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
             <option value="Virtual">Virtual</option>
             <option value="Hibrida">Híbrida</option>
             <option value="Curso_Especial">Curso Especial</option>
+            <option value="Curso_Intensivo">Curso intensivo</option>
+            <option value="Congreso_PV">Congreso presencial/virtual</option>
             <option value="Públicamente Hablando (Virtual)">Públicamente Hablando (Virtual)</option>
           </select>
         </div>
@@ -488,11 +499,11 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           </select>
         </div>
 
-        <!-- Curso Especial: tipo de congreso + módulos virtuales -->
+        <!-- Curso Especial / Curso Intensivo: módulos virtuales (CE además elige tipo de congreso) -->
         <div id="curso_especial_wrap" class="mt-4 p-4 border border-gray-200 rounded-xl hidden">
 
-          <!-- Tipo de congreso: presencial, virtual, o ambos -->
-          <div class="mb-4 p-3 border border-gray-200 rounded-xl bg-gray-50">
+          <!-- Tipo de congreso: presencial, virtual, o ambos (solo Curso Especial) -->
+          <div id="ce_congreso_flags_wrap" class="mb-4 p-3 border border-gray-200 rounded-xl bg-gray-50">
             <div class="font-semibold text-gray-700 mb-2">Tipo de congreso disponible:</div>
             <label class="inline-flex items-center gap-2 mr-6">
               <input type="checkbox" id="ce_congreso_presencial" name="congreso_presencial" value="1"
@@ -630,25 +641,27 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         // NORMALIZACIÓN (para soportar "Curso Especial" y "Curso_Especial")
         var vNorm = (v || '').toLowerCase().replace(/\s+/g, '_');
         var isPHV = (vNorm === 'públicamente_hablando_(virtual)');
+        var isCI  = (vNorm === 'curso_intensivo');
+        var isCPV = (vNorm === 'congreso_pv');
         var ceHasPresencial = (vNorm === 'curso_especial' && fycGetCEPresencial());
         var ceHasVirtual    = (vNorm === 'curso_especial' && fycGetCEVirtual());
 
         var vWrap = document.getElementById('docs_virtual_wrap');
         var pWrap = document.getElementById('docs_presencial_wrap');
 
-        // Adjuntos virtuales: si CE (siempre visible), virtual, hibrida, PHV
-        if (vWrap) vWrap.style.display = (vNorm === 'virtual' || vNorm === 'hibrida' || vNorm === 'curso_especial' || isPHV) ? 'block' : 'none';
-        // Adjuntos presenciales: solo si CE tiene presencial, o presencial/hibrida
-        if (pWrap) pWrap.style.display = (vNorm === 'presencial' || vNorm === 'hibrida' || ceHasPresencial) ? 'block' : 'none';
+        // Adjuntos virtuales: si CE (siempre visible), virtual, hibrida, PHV, curso intensivo, congreso P/V
+        if (vWrap) vWrap.style.display = (vNorm === 'virtual' || vNorm === 'hibrida' || vNorm === 'curso_especial' || isPHV || isCI || isCPV) ? 'block' : 'none';
+        // Adjuntos presenciales: solo si CE tiene presencial, o presencial/hibrida/congreso P/V
+        if (pWrap) pWrap.style.display = (vNorm === 'presencial' || vNorm === 'hibrida' || ceHasPresencial || isCPV) ? 'block' : 'none';
 
         var urlWrap = document.getElementById('wrap_url_conexion');
-        if (urlWrap) urlWrap.style.display = (vNorm === 'virtual' || vNorm === 'hibrida' || vNorm === 'curso_especial' || isPHV) ? 'block' : 'none';
+        if (urlWrap) urlWrap.style.display = (vNorm === 'virtual' || vNorm === 'hibrida' || vNorm === 'curso_especial' || isPHV || isCI || isCPV) ? 'block' : 'none';
 
         // Tipo evento presencial: solo si hay componente presencial
         var teWrap = document.getElementById('wrap_tipo_evento_presencial');
         var teSel = document.getElementById('tipo_evento_presencial');
         if (teWrap && teSel) {
-          var showTE = (vNorm === 'presencial' || vNorm === 'hibrida' || ceHasPresencial);
+          var showTE = (vNorm === 'presencial' || vNorm === 'hibrida' || ceHasPresencial || isCPV);
           if (showTE) {
             teWrap.classList.remove('hidden');
             teSel.required = true;
@@ -691,11 +704,14 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           if (virtWrap) virtWrap.classList.add('hidden');
         }
 
-        // Curso Especial: mostrar bloque módulos
+        // Curso Especial / Curso Intensivo: mostrar bloque módulos
+        // (en Curso Intensivo se ocultan los checkboxes de tipo de congreso)
         var ceWrap = document.getElementById('curso_especial_wrap');
+        var ceFlagsWrap = document.getElementById('ce_congreso_flags_wrap');
         if (ceWrap) {
-          if (vNorm === 'curso_especial') {
+          if (vNorm === 'curso_especial' || isCI) {
             ceWrap.classList.remove('hidden');
+            if (ceFlagsWrap) ceFlagsWrap.style.display = isCI ? 'none' : 'block';
             // ✅ Asegurar que el botón quede “amarrado” siempre
             if (typeof window.__bindCE === 'function') window.__bindCE();
           } else {
@@ -710,7 +726,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         var ta = document.getElementById('lugar_personalizado');
 
         if (lugarWrap) {
-          if (vNorm === 'presencial' || vNorm === 'hibrida' || ceHasPresencial) {
+          if (vNorm === 'presencial' || vNorm === 'hibrida' || ceHasPresencial || isCPV) {
             lugarWrap.classList.remove('hidden');
             var si = rSi && rSi.checked;
             if (ta) {

@@ -212,16 +212,21 @@ if (!$evento) {
 
 $modN = norm_modalidad($evento['modalidad']);
 $es_ce = ($modN === 'curso_especial');
+$es_ci = ($modN === 'curso_intensivo');
+$es_cpv = ($modN === 'congreso_pv');
 $es_phv = ($modN === 'públicamente_hablando_(virtual)');
 
+// Modalidades que gestionan módulos virtuales con nombre
+$gestiona_modulos = ($es_ce || $es_ci);
+
 // Componentes del evento (definen qué secciones se muestran/editan)
-$tiene_presencial = ($modN === 'presencial' || $modN === 'hibrida' || ($es_ce && $evento['congreso_presencial'] === 1));
-$tiene_virtual    = ($modN === 'virtual' || $modN === 'hibrida' || $es_phv || ($es_ce && $evento['congreso_virtual'] === 1));
+$tiene_presencial = ($modN === 'presencial' || $modN === 'hibrida' || $es_cpv || ($es_ce && $evento['congreso_presencial'] === 1));
+$tiene_virtual    = ($modN === 'virtual' || $modN === 'hibrida' || $es_phv || $es_ci || $es_cpv || ($es_ce && $evento['congreso_virtual'] === 1));
 $aplica_tipo_pres = $tiene_presencial; // selector Congreso/Seminario
-$aplica_url       = ($modN === 'virtual' || $modN === 'hibrida' || $es_ce || $es_phv);
+$aplica_url       = ($modN === 'virtual' || $modN === 'hibrida' || $es_ce || $es_phv || $es_ci || $es_cpv);
 
 $fechas_actuales = ev_cargar_fechas($conn, $evento_id);
-$modulos_actuales = $es_ce ? ev_cargar_modulos($conn, $evento_id) : array();
+$modulos_actuales = $gestiona_modulos ? ev_cargar_modulos($conn, $evento_id) : array();
 $total_inscritos = ev_contar_inscritos($conn, $evento_id);
 
 // Clasificar fechas actuales por sección (las 'general' heredadas van a la única sección disponible)
@@ -334,7 +339,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $mods_desactivar = array(); // ids a activo=0
   $cambia_modulos = false;
 
-  if (empty($error) && $es_ce) {
+  if (empty($error) && $gestiona_modulos) {
     $mid = $_POST['modulo_id'] ?? array();
     $mnom = $_POST['modulo_nombre'] ?? array();
     $mfec = $_POST['modulo_fecha'] ?? array();
@@ -470,7 +475,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Módulos: UPDATE en sitio / INSERT nuevos / soft-delete (activo = 0). Nunca DELETE.
-    if (empty($error) && $es_ce && $cambia_modulos) {
+    if (empty($error) && $gestiona_modulos && $cambia_modulos) {
 
       if (!empty($mods_updates)) {
         $up = $conn->prepare("UPDATE eventos_modulos_virtuales
@@ -544,7 +549,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Si hubo error: recargar datos frescos para re-render (no se aplicó nada en BD salvo validación previa)
   $evento = ev_cargar_evento($conn, $evento_id);
   $fechas_actuales = ev_cargar_fechas($conn, $evento_id);
-  $modulos_actuales = $es_ce ? ev_cargar_modulos($conn, $evento_id) : array();
+  $modulos_actuales = $gestiona_modulos ? ev_cargar_modulos($conn, $evento_id) : array();
   $fechas_pres = array();
   $fechas_virt = array();
   foreach ($fechas_actuales as $f) {
@@ -796,7 +801,7 @@ $urlPublica = base_url('registro.php?e=' . urlencode($evento['slug']));
         <?php endif; ?>
       </div>
 
-      <?php if ($es_ce): ?>
+      <?php if ($gestiona_modulos): ?>
         <!-- ====== ZONA SENSIBLE: MÓDULOS VIRTUALES ====== -->
         <div id="zona_modulos" class="p-4 border border-gray-200 rounded-xl space-y-3">
           <div class="font-bold text-gray-800">💻 Módulos virtuales (máx 10)</div>

@@ -392,6 +392,25 @@ function format_asistencia($tipo, $mods_csv, $fechas_map)
     }
     return !empty($out) ? 'Módulos: ' . implode(', ', $out) : 'Módulos: —';
   }
+
+  // Etiquetas humanas para Curso Especial, Híbrida, Curso Intensivo y Congreso P/V
+  $labels = array(
+    'CONGRESO' => 'Congreso presencial',
+    'CURSO_COMPLETO' => 'Curso completo',
+    'MODULOS_VIRTUALES' => 'Módulos virtuales',
+    'CONGRESO_MAS_MODULOS' => 'Congreso + módulos',
+    'CONG_VIRTUAL' => 'Congreso virtual',
+    'CONG_VIRT_MODS' => 'Curso completo virtual',
+    'HIBRIDO' => 'Híbrido (presencial + virtual)',
+    'HIB_VIRTUAL' => '100% virtual',
+    'INTENSIVO_COMPLETO' => 'Curso intensivo completo',
+    'INTENSIVO_MODULOS' => 'Módulos virtuales',
+    'CONG_100_PRESENCIAL' => '100% presencial',
+    'CONG_100_VIRTUAL' => '100% virtual',
+  );
+  if (isset($labels[$tipo]))
+    return $labels[$tipo];
+
   return '—';
 }
 
