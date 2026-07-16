@@ -561,16 +561,23 @@ class CorreoDenuncia
                     $virt = $this->getEventoFechas($evento_id, 'virtual');
                     $agendaHtml .= $this->buildBox('💻 Agenda (Virtual)', $this->buildListaFechasHtml($virt, 'Día'));
                 } elseif ($modalidadLowNorm === 'curso_intensivo') {
-                    // Curso intensivo: agenda = módulos virtuales (todos o los seleccionados)
+                    // Curso intensivo: sesiones generales del curso + módulos virtuales
                     $asist = strtoupper(trim((string) ($data['asistencia_tipo'] ?? '')));
                     $modsCsv = (string) ($data['modulos_fechas'] ?? '');
 
+                    // Sesiones del curso (eventos_fechas): informativas, no son módulos seleccionables
+                    $sesiones = $this->getEventoFechas($evento_id, null);
+                    if (!empty($sesiones)) {
+                        $agendaHtml .= $this->buildBox('📅 Sesiones del curso', $this->buildListaFechasHtml($sesiones, 'Día'));
+                    }
+
                     if ($asist === 'INTENSIVO_MODULOS' && $modsCsv !== '' && strtoupper($modsCsv) !== 'ALL') {
                         $mods = $this->getCursoEspecialModulos($evento_id, $modsCsv);
+                        $agendaHtml .= $this->buildBox('💻 Módulos virtuales seleccionados', $this->buildListaModulosCEHtml($mods));
                     } else {
                         $mods = $this->getCursoEspecialModulos($evento_id, 'ALL');
+                        $agendaHtml .= $this->buildBox('💻 Agenda (Módulos virtuales)', $this->buildListaModulosCEHtml($mods));
                     }
-                    $agendaHtml .= $this->buildBox('💻 Agenda (Módulos virtuales)', $this->buildListaModulosCEHtml($mods));
                 } elseif ($modalidadLowNorm === 'congreso_pv') {
                     // Congreso presencial/virtual: misma jornada, solo cambia la forma de asistencia
                     $asist = strtoupper(trim((string) ($data['asistencia_tipo'] ?? '')));
