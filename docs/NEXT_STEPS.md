@@ -9,7 +9,7 @@
 - Rama activa de desarrollo: `feature/opciones-curso-intensivo-congreso-pv` (basada en `main` `c84d1a7`)
 - Último commit en main: `c84d1a7` — "Merge branch 'feature/editar-usuarios-firma'"
 - **Nuevo (2026-07-16): modalidades Curso Intensivo y Congreso presencial/virtual** (en desarrollo en esta rama):
-  - `Curso_Intensivo` ("Curso intensivo"): solo curso, 100% virtual, con módulos virtuales. Inscrito elige `INTENSIVO_COMPLETO` (todo el curso, módulos=ALL) o `INTENSIVO_MODULOS` (CSV de IDs); fallback seguro a completo
+  - `Curso_Intensivo` ("Curso intensivo"): solo curso, con módulos virtuales. Inscrito elige `INTENSIVO_HIBRIDO` (presencial + virtual) o `INTENSIVO_VIRTUAL` (toda la jornada virtual); ambos con módulos=ALL, sin selección parcial; fallback seguro a híbrido. Códigos anteriores `INTENSIVO_COMPLETO` / `INTENSIVO_MODULOS` quedan solo para lectura de registros previos
   - `Congreso_PV` ("Congreso presencial/virtual"): misma jornada académica, el inscrito escoge UNA forma de asistir: `CONG_100_PRESENCIAL` o `CONG_100_VIRTUAL`. Sin módulos, sin opción combinada, sin la palabra "híbrido"
   - **No requiere SQL**: códigos nuevos caben en `asistencia_tipo VARCHAR(25)`; `modalidad` es `VARCHAR(50)`
   - Curso Especial conserva sus 6 opciones y Híbrida no cambia de comportamiento
@@ -35,7 +35,7 @@
   - `Virtual` — COMPLETO o por MODULOS
   - `Hibrida` — con tipo Congreso/Seminario + **selección del inscrito: HIBRIDO (default) o HIB_VIRTUAL**
   - `Curso_Especial` — hasta 6 opciones: 4 presenciales + 2 virtuales (según `congreso_virtual`)
-  - `Curso_Intensivo` — 2 opciones: INTENSIVO_COMPLETO (default) o INTENSIVO_MODULOS
+  - `Curso_Intensivo` — 2 opciones: INTENSIVO_HIBRIDO (default) o INTENSIVO_VIRTUAL
   - `Congreso_PV` — 2 opciones: CONG_100_PRESENCIAL (default) o CONG_100_VIRTUAL
   - `Públicamente Hablando (Virtual)` — modalidad gratuita, sin soporte de pago
 - Los correos al inscrito y al comercial se envían correctamente vía PHPMailer + SMTP Gmail Relay

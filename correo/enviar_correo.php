@@ -264,10 +264,13 @@ class CorreoDenuncia
             $line1 = $map[$asistencia_tipo] ?? ('Selección: ' . $this->h($asistencia_tipo));
         } elseif ($modalidadLow === 'curso_intensivo') {
             $map = [
-                'INTENSIVO_COMPLETO' => 'Curso intensivo completo',
-                'INTENSIVO_MODULOS' => 'Módulos virtuales',
+                'INTENSIVO_HIBRIDO' => 'MODALIDAD HÍBRIDA (sesiones presenciales más sesiones virtuales)',
+                'INTENSIVO_VIRTUAL' => 'MODALIDAD 100% VIRTUAL (toda la jornada académica virtual)',
+                // Inscripciones anteriores al cambio de modalidades
+                'INTENSIVO_COMPLETO' => 'MODALIDAD HÍBRIDA (sesiones presenciales más sesiones virtuales)',
+                'INTENSIVO_MODULOS' => 'Módulos virtuales seleccionados (modalidad anterior)',
             ];
-            $line1 = 'Asistencia: ' . ($map[$asistencia_tipo] ?? 'Curso intensivo completo');
+            $line1 = 'Asistencia: ' . ($map[$asistencia_tipo] ?? 'MODALIDAD HÍBRIDA');
         } elseif ($modalidadLow === 'congreso_pv') {
             $map = [
                 'CONG_100_PRESENCIAL' => '100% presencial',
@@ -571,6 +574,7 @@ class CorreoDenuncia
                         $agendaHtml .= $this->buildBox('📅 Sesiones del curso', $this->buildListaFechasHtml($sesiones, 'Día'));
                     }
 
+                    // Solo inscripciones anteriores traen un CSV parcial; las actuales van siempre con ALL
                     if ($asist === 'INTENSIVO_MODULOS' && $modsCsv !== '' && strtoupper($modsCsv) !== 'ALL') {
                         $mods = $this->getCursoEspecialModulos($evento_id, $modsCsv);
                         $agendaHtml .= $this->buildBox('💻 Módulos virtuales seleccionados', $this->buildListaModulosCEHtml($mods));
@@ -811,8 +815,10 @@ class CorreoDenuncia
             $mapAltSel = [
                 'HIBRIDO' => 'Híbrido (presencial + virtual)',
                 'HIB_VIRTUAL' => '100% virtual',
-                'INTENSIVO_COMPLETO' => 'Curso intensivo completo',
-                'INTENSIVO_MODULOS' => 'Módulos virtuales',
+                'INTENSIVO_HIBRIDO' => 'MODALIDAD HÍBRIDA',
+                'INTENSIVO_VIRTUAL' => 'MODALIDAD 100% VIRTUAL',
+                'INTENSIVO_COMPLETO' => 'MODALIDAD HÍBRIDA',
+                'INTENSIVO_MODULOS' => 'Módulos virtuales seleccionados (modalidad anterior)',
                 'CONG_100_PRESENCIAL' => '100% presencial',
                 'CONG_100_VIRTUAL' => '100% virtual',
             ];
@@ -926,8 +932,11 @@ class CorreoDenuncia
             ];
             // Curso Intensivo y Congreso presencial/virtual: selección del inscrito
             $mapCiCpv = [
-                'INTENSIVO_COMPLETO' => 'Curso intensivo completo',
-                'INTENSIVO_MODULOS' => 'Módulos virtuales',
+                'INTENSIVO_HIBRIDO' => 'MODALIDAD HÍBRIDA',
+                'INTENSIVO_VIRTUAL' => 'MODALIDAD 100% VIRTUAL',
+                // Inscripciones anteriores al cambio de modalidades
+                'INTENSIVO_COMPLETO' => 'MODALIDAD HÍBRIDA',
+                'INTENSIVO_MODULOS' => 'Módulos virtuales seleccionados (modalidad anterior)',
                 'CONG_100_PRESENCIAL' => '100% presencial',
                 'CONG_100_VIRTUAL' => '100% virtual',
             ];

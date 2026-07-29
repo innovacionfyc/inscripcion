@@ -224,6 +224,10 @@ $tiene_presencial = ($modN === 'presencial' || $modN === 'hibrida' || $es_cpv ||
 $tiene_virtual    = ($modN === 'virtual' || $modN === 'hibrida' || $es_phv || $es_ci || $es_cpv || ($es_ce && $evento['congreso_virtual'] === 1));
 $aplica_tipo_pres = $tiene_presencial; // selector Congreso/Seminario
 $aplica_url       = ($modN === 'virtual' || $modN === 'hibrida' || $es_ce || $es_phv || $es_ci || $es_cpv);
+// Lugar: además de las modalidades con sección presencial, Curso Intensivo lo necesita
+// porque su opción híbrida (INTENSIVO_HIBRIDO) tiene sesiones presenciales.
+// No implica sección de fechas presenciales: en esta fase la agenda sigue siendo una sola.
+$permite_lugar    = ($tiene_presencial || $es_ci);
 
 $fechas_actuales = ev_cargar_fechas($conn, $evento_id);
 $modulos_actuales = $gestiona_modulos ? ev_cargar_modulos($conn, $evento_id) : array();
@@ -277,12 +281,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
   }
 
-  // lugar personalizado: solo si hay componente presencial; vacío = lugar por defecto
+  // lugar personalizado: solo si la modalidad lo admite; vacío = lugar por defecto
+  // Curso intensivo es la excepción: allí el lugar es obligatorio
   $lugar_personalizado = $evento['lugar_personalizado'];
-  if (empty($error) && $tiene_presencial) {
+  if (empty($error) && $permite_lugar) {
     $lugar_personalizado = trim($_POST['lugar_personalizado'] ?? '');
     if ($lugar_personalizado === '')
       $lugar_personalizado = null;
+    if ($es_ci && $lugar_personalizado === null) {
+      $error = 'Para Curso Intensivo debes indicar el lugar de las sesiones presenciales.';
+    }
   }
 
   // URL de conexión: solo si aplica; vacía = null
@@ -699,12 +707,16 @@ $urlPublica = base_url('registro.php?e=' . urlencode($evento['slug']));
         </div>
       <?php endif; ?>
 
-      <?php if ($tiene_presencial): ?>
+      <?php if ($permite_lugar): ?>
         <div class="p-4 border border-gray-200 rounded-xl">
           <label class="font-semibold text-gray-700 block mb-2">Lugar del evento presencial:</label>
           <textarea name="lugar_personalizado" rows="3" class="w-full p-3 border border-gray-300 rounded-xl"
             placeholder="<?php echo hx($DEFAULT_LUGAR_PRESENCIAL); ?>"><?php echo hx((string) $evento['lugar_personalizado']); ?></textarea>
-          <small class="text-gray-500">Déjalo vacío para usar el lugar por defecto (Cafam Floresta).</small>
+          <?php if ($es_ci): ?>
+            <small class="text-gray-500">Este lugar se mostrará a quienes elijan MODALIDAD HÍBRIDA. Es obligatorio; quienes elijan 100% virtual no lo reciben.</small>
+          <?php else: ?>
+            <small class="text-gray-500">Déjalo vacío para usar el lugar por defecto (Cafam Floresta).</small>
+          <?php endif; ?>
         </div>
       <?php endif; ?>
 
