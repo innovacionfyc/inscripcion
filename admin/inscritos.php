@@ -403,8 +403,11 @@ function format_asistencia($tipo, $mods_csv, $fechas_map)
     'CONG_VIRT_MODS' => 'Curso completo virtual',
     'HIBRIDO' => 'Híbrido (presencial + virtual)',
     'HIB_VIRTUAL' => '100% virtual',
-    'INTENSIVO_COMPLETO' => 'Curso intensivo completo',
-    'INTENSIVO_MODULOS' => 'Módulos virtuales',
+    'INTENSIVO_HIBRIDO' => 'MODALIDAD HÍBRIDA',
+    'INTENSIVO_VIRTUAL' => 'MODALIDAD 100% VIRTUAL',
+    // Inscripciones anteriores al cambio de modalidades de Curso Intensivo
+    'INTENSIVO_COMPLETO' => 'MODALIDAD HÍBRIDA',
+    'INTENSIVO_MODULOS' => 'Módulos virtuales seleccionados (modalidad anterior)',
     'CONG_100_PRESENCIAL' => '100% presencial',
     'CONG_100_VIRTUAL' => '100% virtual',
   );

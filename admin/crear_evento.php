@@ -119,7 +119,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   // Lugar personalizado: aplica si hay bloque presencial
   $cambiar_lugar = isset($_POST['cambiar_lugar']) ? strtoupper(trim($_POST['cambiar_lugar'])) : 'NO';
   $lugar_personalizado = null;
-  if (($modLow === 'presencial' || $modLow === 'hibrida' || $modLow === 'congreso_pv' || ($modLow === 'curso_especial' && $congreso_presencial === 1)) && $cambiar_lugar === 'SI') {
+  if ($modLow === 'curso_intensivo') {
+    // Curso intensivo: el lugar es obligatorio, no se ofrece el lugar por defecto
+    $lugar_personalizado = trim($_POST['lugar_personalizado'] ?? '');
+    if ($lugar_personalizado === '')
+      $lugar_personalizado = null;
+  } elseif (($modLow === 'presencial' || $modLow === 'hibrida' || $modLow === 'congreso_pv' || ($modLow === 'curso_especial' && $congreso_presencial === 1)) && $cambiar_lugar === 'SI') {
     $lugar_personalizado = trim($_POST['lugar_personalizado'] ?? '');
     if ($lugar_personalizado === '')
       $lugar_personalizado = null;
@@ -134,6 +139,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     } else {
       $url_conexion = $raw_url;
     }
+  }
+
+  // Curso intensivo: el lugar es obligatorio porque la modalidad híbrida del inscrito
+  // tiene sesiones presenciales; sin lugar propio caería al lugar por defecto.
+  if (empty($error) && $modLow === 'curso_intensivo' && empty($lugar_personalizado)) {
+    $error = 'Para Curso Intensivo debes indicar el lugar de las sesiones presenciales.';
   }
 
   // Upload imagen principal del evento
@@ -325,7 +336,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $destP = $baseDocs . '/evento_presencial/' . (int) $evento_id;
       guardarAdjuntos('docs_presencial', $destP);
     } elseif ($modLow === 'curso_intensivo') {
-      // Curso intensivo: 100% virtual (curso completo o módulos)
+      // Curso intensivo: agenda única; el inscrito elige híbrida o 100% virtual
       $dest = $baseDocs . '/evento_virtual/' . (int) $evento_id;
       guardarAdjuntos('docs_virtual', $dest);
     }
@@ -541,15 +552,22 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         </div>
 
         <div id="wrapCambiarLugar" class="mt-3 p-4 border border-gray-200 rounded-xl hidden">
-          <div class="font-semibold mb-2">¿Deseas cambiar el lugar por defecto?</div>
-          <label class="inline-flex items-center gap-2 mr-4">
-            <input type="radio" id="lugar_si" name="cambiar_lugar" value="SI" class="accent-[#942934]">
-            Sí
-          </label>
-          <label class="inline-flex items-center gap-2">
-            <input type="radio" id="lugar_no" name="cambiar_lugar" value="NO" class="accent-[#942934]" checked>
-            No
-          </label>
+          <div id="wrapLugarOpcional">
+            <div class="font-semibold mb-2">¿Deseas cambiar el lugar por defecto?</div>
+            <label class="inline-flex items-center gap-2 mr-4">
+              <input type="radio" id="lugar_si" name="cambiar_lugar" value="SI" class="accent-[#942934]">
+              Sí
+            </label>
+            <label class="inline-flex items-center gap-2">
+              <input type="radio" id="lugar_no" name="cambiar_lugar" value="NO" class="accent-[#942934]" checked>
+              No
+            </label>
+          </div>
+
+          <div id="wrapLugarCI" class="hidden">
+            <div class="font-semibold mb-2">Lugar de las sesiones presenciales</div>
+            <div class="text-sm text-gray-600">Este lugar se mostrará a quienes elijan MODALIDAD HÍBRIDA.</div>
+          </div>
 
           <textarea id="lugar_personalizado" name="lugar_personalizado"
             class="mt-3 w-full p-3 border border-gray-300 rounded-xl" rows="3"
@@ -720,22 +738,41 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
         }
 
         // mostrar bloque cambiar lugar solo si hay presencial (CE virtual no tiene lugar)
+        // Curso intensivo: la modalidad híbrida del inscrito tiene sesiones presenciales
         var lugarWrap = document.getElementById('wrapCambiarLugar');
         var rSi = document.getElementById('lugar_si');
         var rNo = document.getElementById('lugar_no');
         var ta = document.getElementById('lugar_personalizado');
 
+        var lugarOpc = document.getElementById('wrapLugarOpcional');
+        var lugarCI = document.getElementById('wrapLugarCI');
+
         if (lugarWrap) {
-          if (vNorm === 'presencial' || vNorm === 'hibrida' || ceHasPresencial || isCPV) {
+          if (vNorm === 'presencial' || vNorm === 'hibrida' || ceHasPresencial || isCPV || isCI) {
             lugarWrap.classList.remove('hidden');
-            var si = rSi && rSi.checked;
-            if (ta) {
-              ta.disabled = !si;
-              if (si && !ta.value) ta.value = DEF_LUGAR;
-              if (!si && ta.value === DEF_LUGAR) ta.value = '';
+
+            if (isCI) {
+              // Curso intensivo: lugar obligatorio, sin la pregunta de lugar por defecto
+              if (lugarOpc) lugarOpc.classList.add('hidden');
+              if (lugarCI) lugarCI.classList.remove('hidden');
+              if (ta) {
+                ta.disabled = false;
+                if (ta.value === DEF_LUGAR) ta.value = '';
+              }
+            } else {
+              if (lugarOpc) lugarOpc.classList.remove('hidden');
+              if (lugarCI) lugarCI.classList.add('hidden');
+              var si = rSi && rSi.checked;
+              if (ta) {
+                ta.disabled = !si;
+                if (si && !ta.value) ta.value = DEF_LUGAR;
+                if (!si && ta.value === DEF_LUGAR) ta.value = '';
+              }
             }
           } else {
             lugarWrap.classList.add('hidden');
+            if (lugarOpc) lugarOpc.classList.remove('hidden');
+            if (lugarCI) lugarCI.classList.add('hidden');
             if (ta) ta.disabled = true;
             if (rNo) rNo.checked = true;
             if (rSi) rSi.checked = false;

@@ -300,19 +300,26 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 
 ### `curso_intensivo` (2026-07-16)
 - Valor en BD del select de admin: `Curso_Intensivo` (visible: "Curso intensivo")
-- Evento que es **solo curso** (sin congreso): 100% virtual, con módulos virtuales con nombre
+- Evento que es **solo curso** (sin congreso), con módulos virtuales con nombre
 - Reutiliza la infraestructura de módulos de Curso Especial (`eventos_modulos_virtuales`, máx 10)
 - En admin se muestra el bloque de módulos **sin** los checkboxes de tipo de congreso
 - Las fechas generales del evento se guardan con `tipo='virtual'` en `eventos_fechas`
 - **Selección del inscrito** (2 opciones, radio `curso_intensivo_opcion`):
 
-| Opción | Valor `asistencia_tipo` | `modulos_seleccionados` | `incluye_presencial` | `incluye_virtual` |
+| Opción visible | Valor `asistencia_tipo` | `modulos_seleccionados` | `incluye_presencial` | `incluye_virtual` |
 |--------|------------------------|------------------------|---------------------|------------------|
-| Curso intensivo completo — default | `INTENSIVO_COMPLETO` (18) | `ALL` | NO | SI |
-| Módulos virtuales | `INTENSIVO_MODULOS` (17) | CSV de IDs válidos | NO | SI |
+| MODALIDAD HÍBRIDA — default | `INTENSIVO_HIBRIDO` | `ALL` | SI | SI |
+| MODALIDAD 100% VIRTUAL | `INTENSIVO_VIRTUAL` | `ALL` | NO | SI |
 
-- Fallback seguro en POST: si eligió módulos pero no marcó ninguno válido → `INTENSIVO_COMPLETO` + `ALL`
-- Correo: agenda "💻 Agenda (Módulos virtuales)" (todos o los seleccionados); sin lugar ni guía hotelera; URL de conexión si existe
+- Textos de ayuda: "Sesiones presenciales más sesiones virtuales" y "Participa en toda la jornada académica virtual"
+- **No hay selección parcial de módulos** (2026-07-29): ambas opciones inscriben a toda la jornada académica y guardan `modulos_seleccionados = 'ALL'`. El formulario ya no muestra checkboxes de módulos para esta modalidad ni valida una selección mínima; el listado de sesiones y módulos queda solo como agenda informativa
+- Fallback seguro en POST: cualquier valor distinto de `INTENSIVO_VIRTUAL` → `INTENSIVO_HIBRIDO` + `ALL`
+- **Códigos vigentes para nuevas inscripciones**: `INTENSIVO_HIBRIDO` e `INTENSIVO_VIRTUAL`. Los anteriores `INTENSIVO_COMPLETO` (18) e `INTENSIVO_MODULOS` (17) **solo se leen** por compatibilidad con registros previos y ya no se escriben
+- Compatibilidad de lectura en correo, vista de inscritos y XLS: `INTENSIVO_COMPLETO` → "MODALIDAD HÍBRIDA"; `INTENSIVO_MODULOS` → "Módulos virtuales seleccionados (modalidad anterior)", porque esos registros sí tienen un CSV parcial y llamarlos "100% virtual" sería inexacto
+- Correo: "📅 Sesiones del curso" + "💻 Agenda (Módulos virtuales)" completa en ambas opciones; la rama de módulos seleccionados solo aplica a registros anteriores. Con `INTENSIVO_HIBRIDO` el correo incluye lugar y guía hotelera; con `INTENSIVO_VIRTUAL` no
+- Lugar: `admin/crear_evento.php` y `admin/editar_evento.php` permiten escribir `lugar_personalizado` para esta modalidad. En editar se usa `$permite_lugar` (`$tiene_presencial || $es_ci`) para no arrastrar las secciones de fechas y adjuntos presenciales
+- **Lugar obligatorio** en Curso Intensivo (crear y editar): si llega vacío se muestra "Para Curso Intensivo debes indicar el lugar de las sesiones presenciales." y no se guarda. Así se evita caer al lugar por defecto (Cafam Floresta) y adjuntar una guía hotelera que puede no corresponder. En crear no se ofrece la pregunta "¿Deseas cambiar el lugar por defecto?": el campo va siempre habilitado y sin prellenar
+- **Pendiente**: las fechas siguen guardándose todas con `tipo='virtual'`, así que no se puede marcar qué días son presenciales. Separar la agenda presencial/virtual de Curso Intensivo queda para una fase posterior
 - Sin SQL: los códigos caben en `asistencia_tipo VARCHAR(25)` y `modalidad` es `VARCHAR(50)`
 
 ### `congreso_pv` (2026-07-16)
@@ -398,7 +405,7 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 | email_corporativo | VARCHAR | Destinatario principal del correo |
 | medio | VARCHAR | Cómo se enteró del evento |
 | soporte_pago | VARCHAR NULL | Ruta relativa en `uploads/soportes/` |
-| asistencia_tipo | VARCHAR(25) | COMPLETO, MODULOS, CONGRESO, CURSO_COMPLETO, MODULOS_VIRTUALES, CONGRESO_MAS_MODULOS, CONG_VIRTUAL, CONG_VIRT_MODS, HIBRIDO, HIB_VIRTUAL, INTENSIVO_COMPLETO, INTENSIVO_MODULOS, CONG_100_PRESENCIAL, CONG_100_VIRTUAL |
+| asistencia_tipo | VARCHAR(25) | COMPLETO, MODULOS, CONGRESO, CURSO_COMPLETO, MODULOS_VIRTUALES, CONGRESO_MAS_MODULOS, CONG_VIRTUAL, CONG_VIRT_MODS, HIBRIDO, HIB_VIRTUAL, INTENSIVO_HIBRIDO, INTENSIVO_VIRTUAL, CONG_100_PRESENCIAL, CONG_100_VIRTUAL (+ heredados INTENSIVO_COMPLETO, INTENSIVO_MODULOS: solo lectura) |
 | modulos_seleccionados | VARCHAR NULL | CSV de IDs, "ALL", o vacío |
 | whatsapp_consent | **ENUM('SI','NO')** NULL | |
 | fecha_registro | DATETIME | Timestamp de registro |
@@ -455,7 +462,7 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 
 ### Rama `feature/opciones-curso-intensivo-congreso-pv` (2026-07-16)
 - Dos modalidades nuevas: `Curso_Intensivo` ("Curso intensivo") y `Congreso_PV` ("Congreso presencial/virtual") — ver sección 8
-- Códigos nuevos de `asistencia_tipo`: `INTENSIVO_COMPLETO`, `INTENSIVO_MODULOS`, `CONG_100_PRESENCIAL`, `CONG_100_VIRTUAL` — todos caben en `VARCHAR(25)`, **sin SQL**
+- Códigos nuevos de `asistencia_tipo`: `INTENSIVO_COMPLETO`, `INTENSIVO_MODULOS` (reemplazados el 2026-07-29 por `INTENSIVO_HIBRIDO` / `INTENSIVO_VIRTUAL`, ver sección 8), `CONG_100_PRESENCIAL`, `CONG_100_VIRTUAL` — todos caben en `VARCHAR(25)`, **sin SQL**
 - `admin/crear_evento.php`: opciones nuevas en el select de modalidad; Curso Intensivo muestra módulos sin checkboxes de congreso; Congreso P/V pide tipo presencial, lugar y guarda la jornada como presencial+virtual
 - `admin/editar_evento.php`: booleanos extendidos (`$es_ci`, `$es_cpv`, `$gestiona_modulos`) — Curso Intensivo gestiona módulos igual que CE; slug y modalidad siguen inmutables
 - `public/registro.php`: ramas de render y POST propias para cada modalidad nueva; fallbacks seguros; las modalidades existentes no cambian
