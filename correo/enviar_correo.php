@@ -577,13 +577,11 @@ class CorreoDenuncia
                     $asist = strtoupper(trim((string) ($data['asistencia_tipo'] ?? '')));
                     $modsCsv = (string) ($data['modulos_fechas'] ?? '');
 
-                    // Las sesiones del curso corresponden a la modalidad híbrida (presencial + virtual);
-                    // quien eligió 100% virtual solo cursa la jornada virtual, así que no aplican.
-                    if ($asist !== 'INTENSIVO_VIRTUAL') {
-                        $sesiones = $this->getEventoFechas($evento_id, null);
-                        if (!empty($sesiones)) {
-                            $agendaHtml .= $this->buildBox('📅 Sesiones del curso', $this->buildListaFechasHtml($sesiones, 'Día'));
-                        }
+                    // Sesiones del curso (eventos_fechas): informativas, aplican a ambas
+                    // modalidades del inscrito, no son módulos seleccionables
+                    $sesiones = $this->getEventoFechas($evento_id, null);
+                    if (!empty($sesiones)) {
+                        $agendaHtml .= $this->buildBox('📅 Sesiones del curso', $this->buildListaFechasHtml($sesiones, 'Día'));
                     }
 
                     // Solo inscripciones anteriores traen un CSV parcial; las actuales van siempre con ALL
