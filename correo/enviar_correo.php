@@ -299,8 +299,17 @@ class CorreoDenuncia
         if (empty($tags))
             $tags[] = "<span style='display:inline-block;padding:6px 10px;border-radius:999px;background:#e5e7eb;border:1px solid #d1d5db;color:#111827;font-weight:700;font-size:12px'>General</span>";
 
+        // Curso intensivo: las modalidades actuales cubren toda la jornada, así que no hay
+        // "módulos seleccionados" que listar y la agenda de más abajo ya los muestra.
+        // Solo el código heredado con CSV parcial conserva esa línea.
+        $ciSinSeleccionParcial = ($modalidadLow === 'curso_intensivo' && in_array(
+            $asistencia_tipo,
+            array('INTENSIVO_HIBRIDO', 'INTENSIVO_VIRTUAL', 'INTENSIVO_COMPLETO'),
+            true
+        ));
+
         $modsLine = '';
-        if (!empty($modulos_texto)) {
+        if (!empty($modulos_texto) && !$ciSinSeleccionParcial) {
             $modsLine = "<div style='margin-top:8px;'><strong>Módulos seleccionados:</strong> " . $this->h($modulos_texto) . "</div>";
         }
 
@@ -568,10 +577,13 @@ class CorreoDenuncia
                     $asist = strtoupper(trim((string) ($data['asistencia_tipo'] ?? '')));
                     $modsCsv = (string) ($data['modulos_fechas'] ?? '');
 
-                    // Sesiones del curso (eventos_fechas): informativas, no son módulos seleccionables
-                    $sesiones = $this->getEventoFechas($evento_id, null);
-                    if (!empty($sesiones)) {
-                        $agendaHtml .= $this->buildBox('📅 Sesiones del curso', $this->buildListaFechasHtml($sesiones, 'Día'));
+                    // Las sesiones del curso corresponden a la modalidad híbrida (presencial + virtual);
+                    // quien eligió 100% virtual solo cursa la jornada virtual, así que no aplican.
+                    if ($asist !== 'INTENSIVO_VIRTUAL') {
+                        $sesiones = $this->getEventoFechas($evento_id, null);
+                        if (!empty($sesiones)) {
+                            $agendaHtml .= $this->buildBox('📅 Sesiones del curso', $this->buildListaFechasHtml($sesiones, 'Día'));
+                        }
                     }
 
                     // Solo inscripciones anteriores traen un CSV parcial; las actuales van siempre con ALL
@@ -826,9 +838,15 @@ class CorreoDenuncia
                 $altSel = $mapAltSel[$altSel];
             }
             $altMods = $data['modulos_texto'] ?? '';
+            // Curso intensivo con las modalidades actuales: no hay selección parcial que listar
+            $altCiSinMods = ($modalidadLowNorm === 'curso_intensivo' && in_array(
+                strtoupper(trim((string) ($data['asistencia_tipo'] ?? ''))),
+                array('INTENSIVO_HIBRIDO', 'INTENSIVO_VIRTUAL', 'INTENSIVO_COMPLETO'),
+                true
+            ));
             $altAuto = (!empty($data['autoestudio']) && (int) $data['autoestudio'] === 1) ? " Incluye Autoestudio." : "";
             $altUrl = !empty($data['url_conexion']) ? " Enlace de acceso: " . (string) $data['url_conexion'] . "." : "";
-            $altSelPart = $is_phv_mail ? '' : " Selección: {$altSel}. Módulos: {$altMods}.";
+            $altSelPart = $is_phv_mail ? '' : (" Selección: {$altSel}." . ($altCiSinMods ? '' : " Módulos: {$altMods}."));
             $mail->AltBody = "Inscripción confirmada a {$altNombreEvento} ({$altModalidad}). Fechas: {$altResumen}.{$altSelPart}" . $altAuto . $altUrl;
 
             return $mail->send();
@@ -952,10 +970,26 @@ class CorreoDenuncia
             if (empty($tags))
                 $tags[] = "<span style='display:inline-block;padding:6px 10px;border-radius:999px;background:#e5e7eb;border:1px solid #d1d5db;color:#111827;font-weight:800;font-size:12px'>General</span>";
 
+            // Curso intensivo: las modalidades actuales cubren toda la jornada, no hay
+            // selección parcial de módulos que informar. Solo el código heredado la conserva.
+            $ciSinSeleccionParcial = ($this->normModalidad($data['modalidad'] ?? '') === 'curso_intensivo' && in_array(
+                $asist,
+                array('INTENSIVO_HIBRIDO', 'INTENSIVO_VIRTUAL', 'INTENSIVO_COMPLETO'),
+                true
+            ));
+
+            if ($ciSinSeleccionParcial) {
+                $modsComercialHtml = '';
+            } elseif (!empty($modsTxt)) {
+                $modsComercialHtml = "<div style='margin-top:8px;'><strong>Módulos:</strong> " . $this->h($modsTxt) . "</div>";
+            } else {
+                $modsComercialHtml = "<div style='margin-top:8px;color:#6b7280;'>Módulos: —</div>";
+            }
+
             $seleccionComercial = "
               <div style='display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 0'>" . implode(' ', $tags) . "</div>
               <div style='margin-top:10px;'><strong>Selección:</strong> " . $this->h($selNice) . "</div>
-              " . (!empty($modsTxt) ? "<div style='margin-top:8px;'><strong>Módulos:</strong> " . $this->h($modsTxt) . "</div>" : "<div style='margin-top:8px;color:#6b7280;'>Módulos: —</div>") . "
+              {$modsComercialHtml}
             ";
 
             $mail->Subject = 'Nueva inscripción – ' . $ev;
