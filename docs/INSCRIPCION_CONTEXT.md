@@ -238,6 +238,22 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 - Muestra lugar físico (por defecto: Cafam Floresta, o `lugar_personalizado`)
 - Adjunta guía hotelera si usa lugar por defecto
 - `tipo_evento_presencial`: Congreso o Seminario
+- **Presencial + Seminario (2026-09-28)**: el inscrito elige cómo asistir (radio `asistencia_tipo`). El evento sigue siendo `Presencial` / `Seminario`; la elección es del inscrito, no del evento. Detectado en `registro.php` con `$is_seminario_pv` (`norm_modalidad() === 'presencial'` y tipo normalizado `seminario`)
+
+| Opción | Valor `asistencia_tipo` | `incluye_presencial` | `incluye_virtual` |
+|--------|------------------------|---------------------|------------------|
+| 100% presencial — default | `SEM_100_PRESENCIAL` (18) | SI | NO |
+| 100% virtual | `SEM_100_VIRTUAL` (15) | NO | SI |
+
+- Fallback seguro en POST: cualquier valor distinto de `SEM_100_VIRTUAL` → `SEM_100_PRESENCIAL`. `modulos_seleccionados` siempre `''`
+- `SEM_100_PRESENCIAL`: con lugar, guía hotelera si usa lugar por defecto y adjuntos de `docs/evento_presencial/{id}`
+- `SEM_100_VIRTUAL`: sin lugar, sin guía hotelera y sin adjuntos de `docs/evento_presencial/{id}` (solo `docs/evento_virtual/{id}` si existiera)
+- Agenda: ambas opciones reciben el bloque "📌 Fecha y horario" con las fechas del seminario (sin módulos)
+- Correos: "Tipo de asistencia: 100% presencial / 100% virtual" en el correo al inscrito y en el aviso al comercial. Vista de inscritos y XLS: "100% presencial" / "100% virtual"
+- El reenvío desde `admin/inscritos.php` respeta la elección: `SEM_100_VIRTUAL` se reenvía sin lugar ni guía hotelera
+- Los códigos son distintos de `CONG_100_*` (Congreso_PV) a propósito: Seminario ≠ Congreso
+- Presencial no Seminario (Congreso) no cambia: sin selector y `asistencia_tipo='COMPLETO'`. Seminarios inscritos antes del cambio conservan `COMPLETO`/NULL (sin backfill) y se leen como antes
+- Sin SQL y sin cambios en `admin/crear_evento.php` ni `admin/editar_evento.php`
 
 ### `virtual`
 - Fechas con tipo `virtual` en `eventos_fechas`
@@ -405,7 +421,7 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 | email_corporativo | VARCHAR | Destinatario principal del correo |
 | medio | VARCHAR | Cómo se enteró del evento |
 | soporte_pago | VARCHAR NULL | Ruta relativa en `uploads/soportes/` |
-| asistencia_tipo | VARCHAR(25) | COMPLETO, MODULOS, CONGRESO, CURSO_COMPLETO, MODULOS_VIRTUALES, CONGRESO_MAS_MODULOS, CONG_VIRTUAL, CONG_VIRT_MODS, HIBRIDO, HIB_VIRTUAL, INTENSIVO_HIBRIDO, INTENSIVO_VIRTUAL, CONG_100_PRESENCIAL, CONG_100_VIRTUAL (+ heredados INTENSIVO_COMPLETO, INTENSIVO_MODULOS: solo lectura) |
+| asistencia_tipo | VARCHAR(25) | COMPLETO, MODULOS, CONGRESO, CURSO_COMPLETO, MODULOS_VIRTUALES, CONGRESO_MAS_MODULOS, CONG_VIRTUAL, CONG_VIRT_MODS, HIBRIDO, HIB_VIRTUAL, INTENSIVO_HIBRIDO, INTENSIVO_VIRTUAL, CONG_100_PRESENCIAL, CONG_100_VIRTUAL, SEM_100_PRESENCIAL, SEM_100_VIRTUAL (+ heredados INTENSIVO_COMPLETO, INTENSIVO_MODULOS: solo lectura) |
 | modulos_seleccionados | VARCHAR NULL | CSV de IDs, "ALL", o vacío |
 | whatsapp_consent | **ENUM('SI','NO')** NULL | |
 | fecha_registro | DATETIME | Timestamp de registro |
@@ -459,6 +475,13 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 ---
 
 ## 11. Cambios Recientes Detectados
+
+### Rama `feature/seminario-presencial-virtual` (2026-09-28)
+- Presencial + Seminario: el inscrito elige `SEM_100_PRESENCIAL` (default) o `SEM_100_VIRTUAL` — ver sección 8
+- `public/registro.php`: selector de 2 opciones solo para Presencial + Seminario, rama POST propia con fallback seguro y flags `incluye_*` según la elección
+- `correo/enviar_correo.php`: "Tipo de asistencia" en resumen, AltBody y aviso al comercial; sin línea de módulos para estos códigos
+- `admin/inscritos.php` (etiquetas y reenvío) y `admin/evento_export_xls.php` (etiquetas)
+- **Sin SQL**: los códigos caben en `asistencia_tipo` (18 y 15 caracteres). No se tocaron `crear_evento.php`, `editar_evento.php`, Congreso_PV, Curso_Intensivo, Curso_Especial, Híbrida ni Virtual
 
 ### Rama `feature/opciones-curso-intensivo-congreso-pv` (2026-07-16)
 - Dos modalidades nuevas: `Curso_Intensivo` ("Curso intensivo") y `Congreso_PV` ("Congreso presencial/virtual") — ver sección 8

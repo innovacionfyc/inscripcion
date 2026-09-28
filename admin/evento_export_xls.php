@@ -78,6 +78,8 @@ function asistencia_humana($tipo, $mods_csv, $fechas_map)
     'INTENSIVO_MODULOS' => 'Módulos virtuales seleccionados (modalidad anterior)',
     'CONG_100_PRESENCIAL' => '100% presencial',
     'CONG_100_VIRTUAL' => '100% virtual',
+    'SEM_100_PRESENCIAL' => '100% presencial',
+    'SEM_100_VIRTUAL' => '100% virtual',
   );
   if (isset($labels[$tipo]))
     return $labels[$tipo];

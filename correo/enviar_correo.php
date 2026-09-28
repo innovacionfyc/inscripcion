@@ -277,6 +277,9 @@ class CorreoDenuncia
                 'CONG_100_VIRTUAL' => '100% virtual',
             ];
             $line1 = 'Asistencia: ' . ($map[$asistencia_tipo] ?? '100% presencial');
+        } elseif ($asistencia_tipo === 'SEM_100_PRESENCIAL' || $asistencia_tipo === 'SEM_100_VIRTUAL') {
+            // Seminario presencial: el inscrito eligió presencial o virtual para la misma jornada
+            $line1 = 'Tipo de asistencia: ' . ($asistencia_tipo === 'SEM_100_VIRTUAL' ? '100% virtual' : '100% presencial');
         } else {
             if ($asistencia_tipo === 'HIBRIDO') {
                 $line1 = 'Asistencia: Híbrido (presencial + virtual)';
@@ -831,13 +834,16 @@ class CorreoDenuncia
                 'INTENSIVO_MODULOS' => 'Módulos virtuales seleccionados (modalidad anterior)',
                 'CONG_100_PRESENCIAL' => '100% presencial',
                 'CONG_100_VIRTUAL' => '100% virtual',
+                'SEM_100_PRESENCIAL' => '100% presencial',
+                'SEM_100_VIRTUAL' => '100% virtual',
             ];
+            $altEsSeminario = in_array($altSel, array('SEM_100_PRESENCIAL', 'SEM_100_VIRTUAL'), true);
             if (isset($mapAltSel[$altSel])) {
                 $altSel = $mapAltSel[$altSel];
             }
             $altMods = $data['modulos_texto'] ?? '';
-            // Curso intensivo con las modalidades actuales: no hay selección parcial que listar
-            $altCiSinMods = ($modalidadLowNorm === 'curso_intensivo' && in_array(
+            // Curso intensivo con las modalidades actuales y seminario presencial: no hay módulos que listar
+            $altCiSinMods = $altEsSeminario || ($modalidadLowNorm === 'curso_intensivo' && in_array(
                 strtoupper(trim((string) ($data['asistencia_tipo'] ?? ''))),
                 array('INTENSIVO_HIBRIDO', 'INTENSIVO_VIRTUAL', 'INTENSIVO_COMPLETO'),
                 true
@@ -956,9 +962,17 @@ class CorreoDenuncia
                 'CONG_100_PRESENCIAL' => '100% presencial',
                 'CONG_100_VIRTUAL' => '100% virtual',
             ];
+            // Seminario presencial: el inscrito eligió presencial o virtual
+            $mapSem = [
+                'SEM_100_PRESENCIAL' => '100% presencial',
+                'SEM_100_VIRTUAL' => '100% virtual',
+            ];
+            $esSeminario = isset($mapSem[$asist]);
             $selNice = isset($mapCE[$asist]) ? $mapCE[$asist]
                 : (isset($mapHib[$asist]) ? $mapHib[$asist]
-                    : (isset($mapCiCpv[$asist]) ? $mapCiCpv[$asist] : ($asist ?: 'COMPLETO')));
+                    : (isset($mapCiCpv[$asist]) ? $mapCiCpv[$asist]
+                        : ($esSeminario ? $mapSem[$asist] : ($asist ?: 'COMPLETO'))));
+            $selLabel = $esSeminario ? 'Tipo de asistencia' : 'Selección';
 
             $tags = [];
             if ($incluyeP)
@@ -976,7 +990,7 @@ class CorreoDenuncia
                 true
             ));
 
-            if ($ciSinSeleccionParcial) {
+            if ($ciSinSeleccionParcial || $esSeminario) {
                 $modsComercialHtml = '';
             } elseif (!empty($modsTxt)) {
                 $modsComercialHtml = "<div style='margin-top:8px;'><strong>Módulos:</strong> " . $this->h($modsTxt) . "</div>";
@@ -986,7 +1000,7 @@ class CorreoDenuncia
 
             $seleccionComercial = "
               <div style='display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 0'>" . implode(' ', $tags) . "</div>
-              <div style='margin-top:10px;'><strong>Selección:</strong> " . $this->h($selNice) . "</div>
+              <div style='margin-top:10px;'><strong>{$selLabel}:</strong> " . $this->h($selNice) . "</div>
               {$modsComercialHtml}
             ";
 
@@ -1044,7 +1058,7 @@ class CorreoDenuncia
             $mail->AltBody = "Nueva inscripción en {$ev}. Inscrito: " .
                 (isset($data['inscrito_nombre']) ? $data['inscrito_nombre'] : '') . " - " .
                 (isset($data['email_corporativo']) ? $data['email_corporativo'] : '') .
-                ". Selección: {$selNice}. Módulos: {$modsTxt}." .
+                ". {$selLabel}: {$selNice}." . ($esSeminario ? '' : " Módulos: {$modsTxt}.") .
                 ($hayAdjunto ? ' (se adjunta soporte)' : ' (sin soporte)') .
                 (!empty($data['url_conexion']) ? " URL: " . (string) $data['url_conexion'] . "." : "");
 
