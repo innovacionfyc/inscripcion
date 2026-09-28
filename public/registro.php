@@ -63,6 +63,9 @@ if ($label_presencial !== 'Congreso' && $label_presencial !== 'Seminario') {
   $label_presencial = 'Congreso';
 }
 
+// Presencial + Seminario: el inscrito elige 100% presencial o 100% virtual (el evento sigue siendo Presencial)
+$is_seminario_pv = ($mod === 'presencial' && strtolower(trim((string) ($evento['tipo_evento_presencial'] ?? ''))) === 'seminario');
+
 // Fechas/horario del evento (con tipo)
 $fechas_presenciales = array();
 $fechas_virtuales = array();
@@ -487,6 +490,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $asistencia_tipo = 'CONG_100_PRESENCIAL';
     }
     $modulos_csv = '';
+  }
+  // Presencial + Seminario: 100% presencial o 100% virtual a la misma jornada
+  else if ($mod_form === 'presencial' && $is_seminario_pv) {
+    $asistencia_tipo = isset($_POST['asistencia_tipo']) ? strtoupper(trim($_POST['asistencia_tipo'])) : 'SEM_100_PRESENCIAL';
+    if ($asistencia_tipo !== 'SEM_100_VIRTUAL') {
+      // Fallback seguro
+      $asistencia_tipo = 'SEM_100_PRESENCIAL';
+    }
+    $modulos_csv = '';
   } else {
     $asistencia_tipo = 'COMPLETO';
     $modulos_csv = '';
@@ -572,6 +584,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       // Una sola forma de asistencia: presencial o virtual
       $incluye_presencial = ($asistencia_tipo === 'CONG_100_PRESENCIAL');
       $incluye_virtual = ($asistencia_tipo === 'CONG_100_VIRTUAL');
+    } elseif ($mod_form === 'presencial' && $is_seminario_pv) {
+      // Seminario presencial: el inscrito asiste presencial o virtual, no ambas
+      $incluye_presencial = ($asistencia_tipo === 'SEM_100_PRESENCIAL');
+      $incluye_virtual = ($asistencia_tipo === 'SEM_100_VIRTUAL');
     } else {
       // Híbrida: si el inscrito eligió 100% virtual (HIB_VIRTUAL), no incluye presencial
       $incluye_presencial = ($mod_form === 'presencial' || ($mod_form === 'hibrida' && $asistencia_tipo !== 'HIB_VIRTUAL'));
@@ -1178,6 +1194,30 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
                   <input type="radio" name="asistencia_tipo" value="CONG_100_VIRTUAL" class="accent-[#942934]">
+                  <div>
+                    <div class="font-semibold">100% virtual</div>
+                    <div class="text-sm text-gray-600">Participa en toda la jornada académica virtual</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          <?php endif; ?>
+
+          <?php if ($is_seminario_pv): ?>
+            <div class="p-4 border border-gray-300 rounded-xl">
+              <div class="font-semibold text-gray-800 mb-3">Seleccione su tipo de asistencia</div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                  <input type="radio" name="asistencia_tipo" value="SEM_100_PRESENCIAL" class="accent-[#942934]" checked>
+                  <div>
+                    <div class="font-semibold">100% presencial</div>
+                    <div class="text-sm text-gray-600">Participa en toda la jornada académica presencial</div>
+                  </div>
+                </label>
+
+                <label class="p-3 border border-gray-200 rounded-xl flex gap-2 items-start cursor-pointer hover:bg-slate-50">
+                  <input type="radio" name="asistencia_tipo" value="SEM_100_VIRTUAL" class="accent-[#942934]">
                   <div>
                     <div class="font-semibold">100% virtual</div>
                     <div class="text-sm text-gray-600">Participa en toda la jornada académica virtual</div>

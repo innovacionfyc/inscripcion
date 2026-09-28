@@ -246,7 +246,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
         // Lugar final para el correo (solo presencial)
         $lugar_final = '';
         $modLow = strtolower($evento['modalidad'] ?? '');
-        if ($modLow === 'presencial') {
+        // Seminario presencial con asistencia 100% virtual: sin lugar ni guía hotelera
+        $asisUp = strtoupper(trim((string) $asistencia_tipo));
+        $es_sem_virtual = ($asisUp === 'SEM_100_VIRTUAL');
+        if ($modLow === 'presencial' && !$es_sem_virtual) {
           if (!empty($evento['lugar_personalizado'])) {
             // Permitimos <br> si el admin lo escribió con saltos de línea
             $lugar_final = nl2br($evento['lugar_personalizado']);
@@ -309,7 +312,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
             'detalle_horario' => $detalle_horario,
             'url_imagen' => $img_file,
             'url_imagen_public' => $img_pub,
-            'adjunto_pdf' => (strtolower($evento['modalidad']) === 'presencial' ? (is_file(dirname(__DIR__) . '/docs/GUIA HOTELERA 2025 - Cafam.pdf') ? dirname(__DIR__) . '/docs/GUIA HOTELERA 2025 - Cafam.pdf' : null) : null),
+            'adjunto_pdf' => (strtolower($evento['modalidad']) === 'presencial' && !$es_sem_virtual ? (is_file(dirname(__DIR__) . '/docs/GUIA HOTELERA 2025 - Cafam.pdf') ? dirname(__DIR__) . '/docs/GUIA HOTELERA 2025 - Cafam.pdf' : null) : null),
             'firma_file' => $firma_file,
             'firma_url_public' => $firma_url_public,
             'encargado_nombre' => $evento['encargado_nombre'],
@@ -320,6 +323,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
             'asistencia_tipo' => $asistencia_tipo,
             'modulos_texto' => $modulos_human,
           );
+          // Seminario presencial: los adjuntos siguen la asistencia elegida por el inscrito
+          if ($asisUp === 'SEM_100_PRESENCIAL' || $es_sem_virtual) {
+            $datosCorreo['incluye_presencial'] = $es_sem_virtual ? 'NO' : 'SI';
+            $datosCorreo['incluye_virtual'] = $es_sem_virtual ? 'SI' : 'NO';
+          }
 
           $mailer = new CorreoDenuncia();
           $okReenviar = $mailer->sendConfirmacionInscripcion($ins_nombre, $correoDestino, $datosCorreo);
@@ -410,6 +418,8 @@ function format_asistencia($tipo, $mods_csv, $fechas_map)
     'INTENSIVO_MODULOS' => 'Módulos virtuales seleccionados (modalidad anterior)',
     'CONG_100_PRESENCIAL' => '100% presencial',
     'CONG_100_VIRTUAL' => '100% virtual',
+    'SEM_100_PRESENCIAL' => '100% presencial',
+    'SEM_100_VIRTUAL' => '100% virtual',
   );
   if (isset($labels[$tipo]))
     return $labels[$tipo];
