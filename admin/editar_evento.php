@@ -222,7 +222,7 @@ $gestiona_modulos = ($es_ce || $es_ci);
 // Componentes del evento (definen qué secciones se muestran/editan)
 $tiene_presencial = ($modN === 'presencial' || $modN === 'hibrida' || $es_cpv || ($es_ce && $evento['congreso_presencial'] === 1));
 $tiene_virtual    = ($modN === 'virtual' || $modN === 'hibrida' || $es_phv || $es_ci || $es_cpv || ($es_ce && $evento['congreso_virtual'] === 1));
-$aplica_tipo_pres = $tiene_presencial; // selector Congreso/Seminario
+$aplica_tipo_pres = $tiene_presencial; // selector Congreso/Seminario/Jornada
 $aplica_url       = ($modN === 'virtual' || $modN === 'hibrida' || $es_ce || $es_phv || $es_ci || $es_cpv);
 // Lugar: además de las modalidades con sección presencial, Curso Intensivo lo necesita
 // porque su opción híbrida (INTENSIVO_HIBRIDO) tiene sesiones presenciales.
@@ -276,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $tipo_evento_presencial = $evento['tipo_evento_presencial'];
   if (empty($error) && $aplica_tipo_pres) {
     $tmpTipo = trim($_POST['tipo_evento_presencial'] ?? '');
-    if ($tmpTipo === 'Congreso' || $tmpTipo === 'Seminario') {
+    if ($tmpTipo === 'Congreso' || $tmpTipo === 'Seminario' || $tmpTipo === 'Jornada') {
       $tipo_evento_presencial = $tmpTipo;
     }
   }
@@ -702,6 +702,7 @@ $urlPublica = base_url('registro.php?e=' . urlencode($evento['slug']));
             <option value="">Selecciona...</option>
             <option value="Congreso" <?php echo ($evento['tipo_evento_presencial'] === 'Congreso') ? 'selected' : ''; ?>>Congreso</option>
             <option value="Seminario" <?php echo ($evento['tipo_evento_presencial'] === 'Seminario') ? 'selected' : ''; ?>>Seminario</option>
+            <option value="Jornada" <?php echo ($evento['tipo_evento_presencial'] === 'Jornada') ? 'selected' : ''; ?>>Jornada</option>
           </select>
           <small class="text-gray-500">Si lo dejas sin seleccionar, se conserva el valor actual.</small>
         </div>

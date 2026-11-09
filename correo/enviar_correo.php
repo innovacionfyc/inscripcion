@@ -250,7 +250,7 @@ class CorreoDenuncia
         $line1 = '';
         if ($modalidadLow === 'curso_especial') {
             $tipoPresLabel = trim((string) ($data['tipo_evento_presencial'] ?? 'Congreso'));
-            if ($tipoPresLabel !== 'Congreso' && $tipoPresLabel !== 'Seminario') {
+            if ($tipoPresLabel !== 'Congreso' && $tipoPresLabel !== 'Seminario' && $tipoPresLabel !== 'Jornada') {
                 $tipoPresLabel = 'Congreso';
             }
             $map = [
@@ -936,7 +936,7 @@ class CorreoDenuncia
             $incluyeV = (strtoupper((string) ($data['incluye_virtual'] ?? 'NO')) === 'SI');
 
             $tipoPresLabel = trim((string) ($data['tipo_evento_presencial'] ?? 'Congreso'));
-            if ($tipoPresLabel !== 'Congreso' && $tipoPresLabel !== 'Seminario') {
+            if ($tipoPresLabel !== 'Congreso' && $tipoPresLabel !== 'Seminario' && $tipoPresLabel !== 'Jornada') {
                 $tipoPresLabel = 'Congreso';
             }
             $mapCE = [
