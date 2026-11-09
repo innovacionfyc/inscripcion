@@ -57,9 +57,9 @@ $is_phv = ($mod === 'públicamente_hablando_(virtual)');
 $ce_tiene_presencial = ($mod === 'curso_especial' && (int)($evento['congreso_presencial'] ?? 0) === 1);
 $ce_tiene_virtual    = ($mod === 'curso_especial' && (int)($evento['congreso_virtual'] ?? 0) === 1);
 
-// ✅ Label seguro para presencial: Congreso o Seminario (default: Congreso)
+// Label seguro para presencial: Congreso, Seminario o Jornada (default: Congreso)
 $label_presencial = trim((string) ($evento['tipo_evento_presencial'] ?? ''));
-if ($label_presencial !== 'Congreso' && $label_presencial !== 'Seminario') {
+if ($label_presencial !== 'Congreso' && $label_presencial !== 'Seminario' && $label_presencial !== 'Jornada') {
   $label_presencial = 'Congreso';
 }
 

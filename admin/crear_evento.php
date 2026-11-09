@@ -93,11 +93,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
   $modLow = strtolower(trim($modalidad));
 
-  // ✅ NUEVO: Tipo evento presencial (Congreso/Seminario) - solo si modalidad tiene presencial
+  // Tipo evento presencial (Congreso/Seminario/Jornada) - solo si modalidad tiene presencial
   $tipo_evento_presencial = null;
   if ($modLow === 'presencial' || $modLow === 'hibrida' || $modLow === 'curso_especial' || $modLow === 'congreso_pv') {
     $tmpTipo = trim($_POST['tipo_evento_presencial'] ?? '');
-    if ($tmpTipo === 'Congreso' || $tmpTipo === 'Seminario') {
+    if ($tmpTipo === 'Congreso' || $tmpTipo === 'Seminario' || $tmpTipo === 'Jornada') {
       $tipo_evento_presencial = $tmpTipo;
     } else {
       $tipo_evento_presencial = null;
@@ -499,7 +499,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           </select>
         </div>
 
-        <!-- ✅ NUEVO: Tipo evento presencial (Congreso / Seminario) -->
+        <!-- Tipo evento presencial (Congreso / Seminario / Jornada) -->
         <div id="wrap_tipo_evento_presencial" class="mt-3 p-4 border border-gray-200 rounded-xl hidden">
           <label class="font-semibold text-gray-700 block mb-2">Tipo de evento presencial:</label>
           <select id="tipo_evento_presencial" name="tipo_evento_presencial"
@@ -507,6 +507,7 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
             <option value="">Selecciona...</option>
             <option value="Congreso">Congreso</option>
             <option value="Seminario">Seminario</option>
+            <option value="Jornada">Jornada</option>
           </select>
         </div>
 

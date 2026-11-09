@@ -237,7 +237,7 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 - Fechas con tipo `presencial` en `eventos_fechas`
 - Muestra lugar físico (por defecto: Cafam Floresta, o `lugar_personalizado`)
 - Adjunta guía hotelera si usa lugar por defecto
-- `tipo_evento_presencial`: Congreso o Seminario
+- `tipo_evento_presencial`: Congreso, Seminario o Jornada
 - **Presencial + Seminario (2026-09-28)**: el inscrito elige cómo asistir (radio `asistencia_tipo`). El evento sigue siendo `Presencial` / `Seminario`; la elección es del inscrito, no del evento. Detectado en `registro.php` con `$is_seminario_pv` (`norm_modalidad() === 'presencial'` y tipo normalizado `seminario`)
 
 | Opción | Valor `asistencia_tipo` | `incluye_presencial` | `incluye_virtual` |
@@ -254,6 +254,15 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 - Los códigos son distintos de `CONG_100_*` (Congreso_PV) a propósito: Seminario ≠ Congreso
 - Presencial no Seminario (Congreso) no cambia: sin selector y `asistencia_tipo='COMPLETO'`. Seminarios inscritos antes del cambio conservan `COMPLETO`/NULL (sin backfill) y se leen como antes
 - Sin SQL y sin cambios en `admin/crear_evento.php` ni `admin/editar_evento.php`
+
+#### Presencial + Jornada (2026-11-09)
+- Tercer valor de `tipo_evento_presencial`, pensado para eventos **exclusivamente presenciales**
+- **No** se muestra "Seleccione su tipo de asistencia", **no** aparece la opción 100% virtual y **no** se generan códigos `SEM_100_*`
+- Cae en el flujo presencial tradicional: `asistencia_tipo = 'COMPLETO'`, `modulos_seleccionados = ''`, `incluye_presencial = SI`, `incluye_virtual = NO`; lugar, agenda, guía hotelera, adjuntos presenciales y aviso al comercial siguen las reglas presenciales existentes
+- No requirió lógica nueva en `registro.php`: `$is_seminario_pv` exige el tipo normalizado `seminario`, así que Jornada no activa el selector. El único ajuste fue admitir "Jornada" en el saneador de `$label_presencial` para que la etiqueta no se degrade a "Congreso"
+- **Sí requirió SQL** (a diferencia de Seminario): `tipo_evento_presencial` es ENUM — ver `docs/sql/2026_11_09_jornada_tipo_evento_presencial.sql`
+- Admin: "Jornada" se agregó al select y a la whitelist del POST en `crear_evento.php` y `editar_evento.php`
+- `inscritos.php` y `evento_export_xls.php` no necesitaron cambios: `COMPLETO` ya se muestra como "Completo", igual que un Presencial tradicional
 
 ### `virtual`
 - Fechas con tipo `virtual` en `eventos_fechas`
@@ -272,7 +281,7 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 ### `hibrida`
 - Fechas divididas: presenciales + virtuales en `eventos_fechas`
 - Muestra bloque de ambas fechas en el formulario
-- `tipo_evento_presencial`: Congreso o Seminario
+- `tipo_evento_presencial`: Congreso, Seminario o Jornada
 - **Selección del inscrito** (2 opciones, radio `asistencia_tipo`):
 
 | Opción | Valor `asistencia_tipo` | `incluye_presencial` | `incluye_virtual` |
@@ -342,7 +351,7 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 - Valor en BD del select de admin: `Congreso_PV` (visible: "Congreso presencial/virtual")
 - Congreso donde el inscrito escoge **una sola** forma de asistir a la **misma jornada académica**
 - NO existe opción "presencial + virtual" y NO hay módulos virtuales; no se usa la palabra "híbrido"
-- `tipo_evento_presencial` aplica (Congreso/Seminario); lugar personalizado y adjuntos presencial+virtual disponibles
+- `tipo_evento_presencial` aplica (Congreso/Seminario/Jornada); lugar personalizado y adjuntos presencial+virtual disponibles
 - Las fechas de la jornada se guardan duplicadas con `tipo='presencial'` y `tipo='virtual'` en `eventos_fechas` (como CE con ambas banderas)
 - **Selección del inscrito** (2 opciones, radio `asistencia_tipo`):
 
@@ -369,7 +378,7 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 | slug | VARCHAR UNIQUE | Identificador URL (generado desde nombre) |
 | imagen | VARCHAR | Nombre de archivo en `uploads/eventos/` |
 | modalidad | VARCHAR(50) | Valores en BD: "Presencial", "Virtual", "Hibrida", "Curso_Especial", "Públicamente Hablando (Virtual)". Case mixto — siempre normalizar con `norm_modalidad()` en PHP |
-| tipo_evento_presencial | **ENUM('Congreso','Seminario')** NULL | Solo aplica a modalidades con bloque presencial |
+| tipo_evento_presencial | **ENUM('Congreso','Seminario','Jornada')** NULL | Solo aplica a modalidades con bloque presencial |
 | congreso_presencial | TINYINT(1) NOT NULL DEFAULT 1 | Solo Curso Especial: 1 = congreso presencial disponible |
 | congreso_virtual | TINYINT(1) NOT NULL DEFAULT 0 | Solo Curso Especial: 1 = congreso virtual disponible |
 | lugar_personalizado | TEXT NULL | Lugar alternativo al por defecto |
@@ -517,10 +526,10 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 - PR #1 — URL de conexión opcional + tipo evento presencial
 
 ### Campo `tipo_evento_presencial`
-- **Tipo real en BD**: `ENUM('Congreso','Seminario')` NULL (no VARCHAR)
+- **Tipo real en BD**: `ENUM('Congreso','Seminario','Jornada')` NULL (no VARCHAR). 'Jornada' se agregó el 2026-11-09 con `docs/sql/2026_11_09_jornada_tipo_evento_presencial.sql`
 - **Dónde se guarda**: `crear_evento.php` → INSERT en `eventos`
 - **Dónde se usa**: `registro.php` → label dinámico ("Congreso / Presencial" o "Seminario / Presencial"), también pasa a los datos de correo
-- **Validación PHP**: si el valor no es exactamente "Congreso" o "Seminario", se usa "Congreso" como fallback
+- **Validación PHP**: si el valor no es exactamente "Congreso", "Seminario" o "Jornada", se usa "Congreso" como fallback
 - **Cuándo aplica**: modalidades `presencial`, `hibrida`, `curso_especial`
 
 ### Campo `url_conexion`

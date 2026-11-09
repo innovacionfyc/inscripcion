@@ -31,7 +31,7 @@
   - **No requirió SQL**
 - El sistema está funcional y en producción (`https://inscripcion.fycconsultores.com/public/`)
 - El formulario de inscripción maneja **7 modalidades**:
-  - `Presencial` — con tipo Congreso/Seminario; **Seminario: el inscrito elige SEM_100_PRESENCIAL (default) o SEM_100_VIRTUAL** (2026-09-28)
+  - `Presencial` — con tipo Congreso/Seminario/Jornada; **Seminario: el inscrito elige SEM_100_PRESENCIAL (default) o SEM_100_VIRTUAL** (2026-09-28); **Jornada: exclusivamente presencial, sin selector de asistencia** (2026-11-09)
   - `Virtual` — COMPLETO o por MODULOS
   - `Hibrida` — con tipo Congreso/Seminario + **selección del inscrito: HIBRIDO (default) o HIB_VIRTUAL**
   - `Curso_Especial` — hasta 6 opciones: 4 presenciales + 2 virtuales (según `congreso_virtual`)
@@ -48,6 +48,7 @@
 - ✅ `feature/opciones-inscripcion-hibrida` — **NO requiere SQL**: los códigos `HIBRIDO` (7) y `HIB_VIRTUAL` (11) caben en `asistencia_tipo VARCHAR(25)` ya existente en ambas BD
 - ✅ `feature/opciones-curso-intensivo-congreso-pv` — **NO requiere SQL**: `INTENSIVO_COMPLETO` (18), `INTENSIVO_MODULOS` (17), `CONG_100_PRESENCIAL` (19) y `CONG_100_VIRTUAL` (16) caben en `asistencia_tipo VARCHAR(25)`; las modalidades nuevas caben en `modalidad VARCHAR(50)`; no se tocó ningún ENUM
 - ✅ `feature/seminario-presencial-virtual` — **NO requiere SQL**: `SEM_100_PRESENCIAL` (18) y `SEM_100_VIRTUAL` (15) caben en `asistencia_tipo`
+- ⏳ `docs/sql/2026_11_09_jornada_tipo_evento_presencial.sql` — **REQUIERE SQL**: `tipo_evento_presencial` es ENUM, así que admitir "Jornada" obliga a un `MODIFY COLUMN`. Pendiente de aplicar en PRODUCCIÓN. **No copiar el ENUM local**: el local tiene `Diplomado` (rama no mergeada) que producción no tiene; verificar el ENUM real de producción antes del ALTER y conservar todos sus valores
 
 > Nota: existe una rama local pausada `feature/diplomado-curso-especial` (commit `9242e4e`)
 > con su propia migración (`2026_06_11_diplomado_tipo_evento_presencial.sql`, aplicada solo
@@ -73,7 +74,7 @@
 | Tabla.Columna | Tipo Real | Nota |
 |---|---|---|
 | `eventos.modalidad` | `VARCHAR(50)` | Case mixto en datos actuales |
-| `eventos.tipo_evento_presencial` | `ENUM('Congreso','Seminario')` NULL | En BD LOCAL puede aparecer también 'Diplomado' (rama pausada, solo local) |
+| `eventos.tipo_evento_presencial` | `ENUM('Congreso','Seminario','Jornada')` NULL | 'Jornada' agregado 2026-11-09. En BD LOCAL aparece además 'Diplomado' (rama pausada, solo local) — **no replicar en producción** |
 | `eventos.congreso_presencial` | `TINYINT(1) NOT NULL DEFAULT 1` | Aplicado en LOCAL y PRODUCCIÓN ✅ |
 | `eventos.congreso_virtual` | `TINYINT(1) NOT NULL DEFAULT 0` | Aplicado en LOCAL y PRODUCCIÓN ✅ |
 | `eventos.url_conexion` | `VARCHAR(500)` NULL | Migración `2026_05_22` aplicada |
