@@ -7,6 +7,7 @@ require_login();
 
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
+require_once dirname(__DIR__) . '/config/evento_config.php';
 require_once dirname(__DIR__) . '/correo/enviar_correo.php';
 date_default_timezone_set('America/Bogota');
 
@@ -323,6 +324,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
             'asistencia_tipo' => $asistencia_tipo,
             'modulos_texto' => $modulos_human,
           );
+          // Mensajes de soporte de pago según la configuración actual del evento
+          $evento_cfg = evento_config_cargar($conn, $evento_id);
+          $datosCorreo['solicitar_soporte_confirmacion'] = $evento_cfg['solicitar_soporte_confirmacion'];
+
           // Seminario presencial: los adjuntos siguen la asistencia elegida por el inscrito
           if ($asisUp === 'SEM_100_PRESENCIAL' || $es_sem_virtual) {
             $datosCorreo['incluye_presencial'] = $es_sem_virtual ? 'NO' : 'SI';

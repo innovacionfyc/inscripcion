@@ -229,6 +229,16 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 - Reply-To: email del inscrito
 - Adjunto: soporte de pago si lo subió
 
+### Mensajes de soporte de pago (`eventos.solicitar_soporte_confirmacion`, 2026-11-26)
+- Casilla "Mostrar recordatorios de soporte de pago en los correos" en crear/editar evento, para **todas** las modalidades; marcada por defecto (`1`)
+- Con `0` se omiten **solo** estos mensajes:
+  - Correo al inscrito: el punto "Para garantizar su reserva, por favor envíe con anticipación el soporte de pago o autorización correspondiente." del bloque "Tenga en cuenta". Se conservan "Confirma tu asistencia antes del…" y "Un día antes… cronograma" (sin viñetas vacías). El texto plano nunca incluyó esa solicitud
+  - Aviso al comercial: el recuadro "⚠️ El inscrito no adjuntó soporte." y el texto plano "(sin soporte)"
+- Con `1` todo queda como antes. PHV conserva su regla: sin bloque "Tenga en cuenta" en el correo al inscrito
+- Si el inscrito **sí** adjuntó soporte, el archivo se sigue adjuntando al comercial con "📎 Se adjuntó el Soporte de Asistencia." y "(se adjunta soporte)", sin importar la configuración
+- No cambia el campo de carga del formulario, las validaciones de archivo ni las reglas de pago
+- El reenvío desde `admin/inscritos.php` lee la configuración actual del evento
+
 ---
 
 ## 8. Modalidades de Eventos
@@ -263,6 +273,13 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 - **Sí requirió SQL** (a diferencia de Seminario): `tipo_evento_presencial` es ENUM — ver `docs/sql/2026_11_09_jornada_tipo_evento_presencial.sql`
 - Admin: "Jornada" se agregó al select y a la whitelist del POST en `crear_evento.php` y `editar_evento.php`
 - `inscritos.php` y `evento_export_xls.php` no necesitaron cambios: `COMPLETO` ya se muestra como "Completo", igual que un Presencial tradicional
+
+#### Seminario exclusivamente presencial (2026-11-26)
+- Configuración por evento `eventos.permite_asistencia_virtual` (casilla "Permitir asistencia virtual" en crear/editar evento, visible solo con Presencial + Seminario; marcada por defecto)
+- Con `0`: el formulario no muestra el selector y en su lugar indica "Asistencia exclusivamente presencial". Las inscripciones nuevas se guardan como `SEM_100_PRESENCIAL` (P=SI, V=NO, con lugar, guía y adjuntos presenciales según las reglas de siempre)
+- Un POST manipulado con `asistencia_tipo=SEM_100_VIRTUAL` se **rechaza** (HTTP 422 y mensaje): no se guarda la inscripción ni se envían correos; no se convierte en presencial en silencio. Otros valores siguen el fallback a `SEM_100_PRESENCIAL`
+- Los inscritos `SEM_100_VIRTUAL` anteriores conservan su código, sus etiquetas y su reenvío virtual aunque luego se desactive la opción
+- Helper compartido: `config/evento_config.php` (`evento_config_cargar()`, `evento_config_post()` con validación estricta 0/1)
 
 ### `virtual`
 - Fechas con tipo `virtual` en `eventos_fechas`
@@ -381,6 +398,8 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 | tipo_evento_presencial | **ENUM('Congreso','Seminario','Jornada')** NULL | Solo aplica a modalidades con bloque presencial |
 | congreso_presencial | TINYINT(1) NOT NULL DEFAULT 1 | Solo Curso Especial: 1 = congreso presencial disponible |
 | congreso_virtual | TINYINT(1) NOT NULL DEFAULT 0 | Solo Curso Especial: 1 = congreso virtual disponible |
+| permite_asistencia_virtual | TINYINT(1) NOT NULL DEFAULT 1 | Solo Presencial + Seminario: 1 = el inscrito puede elegir `SEM_100_VIRTUAL`; 0 = exclusivamente presencial (migración `2026_11_26`) |
+| solicitar_soporte_confirmacion | TINYINT(1) NOT NULL DEFAULT 1 | Todas las modalidades: 1 = los correos conservan sus mensajes de soporte de pago; 0 = se omiten (migración `2026_11_26`) |
 | lugar_personalizado | TEXT NULL | Lugar alternativo al por defecto |
 | url_conexion | VARCHAR(500) NULL | URL opcional de acceso al evento. Si se diligencia, se muestra como botón en el correo al inscrito |
 | fecha_limite | DATE | Fecha límite para confirmar asistencia |
@@ -484,6 +503,14 @@ Helper `base_url($path)`: detecta HTTPS/HTTP y construye URLs absolutas. `APP_BA
 ---
 
 ## 11. Cambios Recientes Detectados
+
+### Rama `feature/configuracion-asistencia-soporte-evento` (2026-11-26)
+- Dos configuraciones independientes por evento: `permite_asistencia_virtual` (Presencial + Seminario) y `solicitar_soporte_confirmacion` (todas) — ver secciones 7 y 8
+- **Requiere SQL aditivo**: `docs/sql/2026_11_26_configuracion_asistencia_soporte_evento.sql`. Con `DEFAULT 1` todos los eventos conservan su comportamiento
+- Compatibilidad: si el código llega antes que el SQL, `config/evento_config.php` detecta que faltan las columnas y usa 1; el admin muestra "Pendiente la migración de base de datos" y no intenta guardar
+- Si falla el guardado de la configuración (`evento_config_guardar()`, que también captura excepciones de mysqli), el admin **no** muestra éxito: editar redirige con `cfg_error=1` ("Los demás cambios se guardaron, pero la configuración… NO se pudo guardar") y crear muestra el aviso junto al evento creado. Queda registrado en `error_log` y en `audit_log` (`config_guardada: 0`). Un fallo al **leer** la configuración nunca tumba los formularios: se usa 1/1
+- Archivos: `config/evento_config.php` (nuevo), `admin/crear_evento.php`, `admin/editar_evento.php`, `public/registro.php`, `correo/enviar_correo.php`, `admin/inscritos.php`. `admin/evento_export_xls.php` sin cambios
+- No se tocó el ENUM `tipo_evento_presencial` ni `inscritos`
 
 ### Rama `feature/seminario-presencial-virtual` (2026-09-28)
 - Presencial + Seminario: el inscrito elige `SEM_100_PRESENCIAL` (default) o `SEM_100_VIRTUAL` — ver sección 8

@@ -6,6 +6,7 @@ require_once __DIR__ . '/_auth.php';
 require_login();
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
+require_once dirname(__DIR__) . '/config/evento_config.php';
 
 function generarSlug($texto)
 {
@@ -130,6 +131,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $lugar_personalizado = null;
   }
 
+  // Configuración del formulario y confirmaciones (0/1 estrictos; ausente o inválido = 1)
+  // Permitir asistencia virtual: solo aplica a Presencial + Seminario
+  $permite_asistencia_virtual = 1;
+  if ($modLow === 'presencial' && $tipo_evento_presencial === 'Seminario') {
+    $tmpCfg = evento_config_post('permite_asistencia_virtual');
+    $permite_asistencia_virtual = ($tmpCfg === null) ? 1 : $tmpCfg;
+  }
+  $tmpCfg = evento_config_post('solicitar_soporte_confirmacion');
+  $solicitar_soporte_confirmacion = ($tmpCfg === null) ? 1 : $tmpCfg;
+
   // URL de conexión al evento (opcional)
   $url_conexion = null;
   $raw_url = trim($_POST['url_conexion'] ?? '');
@@ -166,6 +177,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   if ($stmt->execute()) {
     $evento_id = $stmt->insert_id;
     $stmt->close();
+
+    // Configuración por evento: solo las columnas que existan (si falta el SQL, quedan los defectos)
+    $cfgGuardada = evento_config_guardar($conn, $evento_id, array(
+      'permite_asistencia_virtual' => $permite_asistencia_virtual,
+      'solicitar_soporte_confirmacion' => $solicitar_soporte_confirmacion
+    ));
 
     // =========================================================
     // 1) Guardar fechas/horarios (eventos_fechas)
@@ -348,7 +365,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 
     $conn->close();
-    header("Location: " . basename(__FILE__) . "?ok=1&slug=" . urlencode($slug));
+    header("Location: " . basename(__FILE__) . "?ok=1&slug=" . urlencode($slug) . ($cfgGuardada ? '' : '&cfg_error=1'));
     exit;
 
   } else {
@@ -379,6 +396,13 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
     include __DIR__ . '/_topbar.php';
     ?>
     <h1 class="text-2xl font-bold text-[#942934] text-center mb-4">📆 Crear nuevo evento</h1>
+
+    <?php if (isset($_GET['cfg_error']) && $_GET['cfg_error'] == 1): ?>
+      <div class="bg-red-100 text-red-800 font-medium px-6 py-4 rounded-xl mb-4">
+        El evento se creó, pero su configuración del formulario y confirmaciones NO se pudo guardar.
+        Ábrelo en "Editar evento" y vuelve a guardar esa configuración.
+      </div>
+    <?php endif; ?>
 
     <?php if (isset($_GET['ok']) && $_GET['ok'] == 1 && $slugValue): ?>
       <div class="bg-green-100 text-green-800 font-medium px-6 py-4 rounded-xl mb-4">
@@ -596,6 +620,36 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
           <small class="text-gray-500">Opcional. Si se diligencia, se enviará al inscrito en el correo de confirmación.</small>
         </div>
 
+        <!-- Configuración del formulario y confirmaciones (por evento) -->
+        <div id="wrap_config_evento" class="mt-4 p-4 border border-gray-200 rounded-xl">
+          <div class="font-semibold text-gray-700 mb-2">Configuración del formulario y confirmaciones</div>
+          <?php if (count(evento_config_columnas($conn)) < 2): ?>
+            <div class="mb-3 p-3 rounded-xl bg-yellow-50 border border-gray-200 text-yellow-800 text-sm">
+              Pendiente la migración de base de datos: esta configuración aún no se guardará y el evento usará el comportamiento predeterminado.
+            </div>
+          <?php endif; ?>
+
+          <div id="wrap_cfg_virtual" class="mb-3 hidden">
+            <input type="hidden" name="permite_asistencia_virtual" value="0">
+            <label class="inline-flex items-center gap-2">
+              <input type="checkbox" id="permite_asistencia_virtual" name="permite_asistencia_virtual" value="1"
+                class="accent-[#942934]" checked>
+              Permitir asistencia virtual
+            </label>
+            <div class="text-sm text-gray-600" style="margin-left:1.5rem">Si se desactiva, el seminario solo permite asistencia presencial.</div>
+          </div>
+
+          <div>
+            <input type="hidden" name="solicitar_soporte_confirmacion" value="0">
+            <label class="inline-flex items-center gap-2">
+              <input type="checkbox" id="solicitar_soporte_confirmacion" name="solicitar_soporte_confirmacion" value="1"
+                class="accent-[#942934]" checked>
+              Mostrar recordatorios de soporte de pago en los correos
+            </label>
+            <div class="text-sm text-gray-600" style="margin-left:1.5rem">Si se desactiva, el correo al participante no pide el soporte de pago y el aviso a la comercial no advierte que falta.</div>
+          </div>
+        </div>
+
         <div class="mt-4 p-4 border border-gray-200 rounded-xl">
           <div class="font-semibold text-gray-700 mb-2">Autoestudio y trabajo integrador</div>
 
@@ -689,6 +743,13 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
             teSel.required = false;
             teSel.value = '';
           }
+        }
+
+        // Permitir asistencia virtual: solo Presencial + Seminario
+        var cfgVirtWrap = document.getElementById('wrap_cfg_virtual');
+        if (cfgVirtWrap) {
+          var esSeminarioPres = (vNorm === 'presencial' && teSel && teSel.value === 'Seminario');
+          cfgVirtWrap.classList.toggle('hidden', !esSeminarioPres);
         }
 
         // wrappers días
@@ -786,6 +847,9 @@ $formURL = $slugValue ? base_url('registro.php?e=' . urlencode($slugValue)) : ''
       function fycBind() {
         var sel = document.querySelector('select[name="modalidad"], #modalidad');
         if (sel) sel.addEventListener('change', fycToggleAdjuntosYLugar);
+
+        var selTipo = document.getElementById('tipo_evento_presencial');
+        if (selTipo) selTipo.addEventListener('change', fycToggleAdjuntosYLugar);
 
         var rSi = document.getElementById('lugar_si');
         var rNo = document.getElementById('lugar_no');
