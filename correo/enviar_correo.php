@@ -78,6 +78,13 @@ class CorreoDenuncia
         return $t;
     }
 
+    // Mensajes de soporte de pago (solicitud al participante y advertencia a la comercial).
+    // Solo un 0 explícito los desactiva; si el dato no llega se conserva el comportamiento histórico.
+    private function soporteActivo($data)
+    {
+        return (string) ($data['solicitar_soporte_confirmacion'] ?? '1') !== '0';
+    }
+
     private function buildBox($title, $htmlBody)
     {
         return "
@@ -714,12 +721,14 @@ class CorreoDenuncia
             }
 
             // "Tenga en cuenta" block — omitido para PHV (no hay soporte de pago)
+            // La solicitud de soporte se omite si el evento tiene solicitar_soporte_confirmacion = 0
             $tenganEnCuentaHtml = '';
             if (!$is_phv_mail) {
                 $tenganEnCuentaHtml = "<div style='margin:10px 0 0;'>
                     <div style='font-weight:800; margin-bottom:6px;'>Tenga en cuenta</div>
-                    <ul style='margin:8px 0 0; padding-left:18px; color:#111827'>
-                      <li>Para garantizar su reserva, por favor envíe con anticipación el soporte de pago o autorización correspondiente.</li>"
+                    <ul style='margin:8px 0 0; padding-left:18px; color:#111827'>"
+                    . ($this->soporteActivo($data) ? "
+                      <li>Para garantizar su reserva, por favor envíe con anticipación el soporte de pago o autorización correspondiente.</li>" : "")
                     . (!empty($fechaLimiteTxt) ? "<li>Confirma tu asistencia antes del <strong>{$fechaLimiteTxt}</strong>.</li>" : "")
                     . "<li>Un día antes del evento recibirás el cronograma detallado.</li>
                     </ul>
@@ -1040,7 +1049,9 @@ class CorreoDenuncia
 
                   " . ($hayAdjunto
                 ? "<div style='margin:10px 0 0; padding:12px; border-radius:12px; border:1px solid #bbf7d0; background:#ecfdf5; color:#166534; font-weight:800;'>📎 Se adjuntó el Soporte de Asistencia.</div>"
-                : "<div style='margin:10px 0 0; padding:12px; border-radius:12px; border:1px solid #fed7aa; background:#fff7ed; color:#9a3412; font-weight:800;'>⚠️ El inscrito no adjuntó soporte.</div>"
+                : ($this->soporteActivo($data)
+                    ? "<div style='margin:10px 0 0; padding:12px; border-radius:12px; border:1px solid #fed7aa; background:#fff7ed; color:#9a3412; font-weight:800;'>⚠️ El inscrito no adjuntó soporte.</div>"
+                    : "")
             ) . "
 
                   <div style='margin:12px 0 0; font-size:12px; color:#6b7280'>
@@ -1059,7 +1070,7 @@ class CorreoDenuncia
                 (isset($data['inscrito_nombre']) ? $data['inscrito_nombre'] : '') . " - " .
                 (isset($data['email_corporativo']) ? $data['email_corporativo'] : '') .
                 ". {$selLabel}: {$selNice}." . ($esSeminario ? '' : " Módulos: {$modsTxt}.") .
-                ($hayAdjunto ? ' (se adjunta soporte)' : ' (sin soporte)') .
+                ($hayAdjunto ? ' (se adjunta soporte)' : ($this->soporteActivo($data) ? ' (sin soporte)' : '')) .
                 (!empty($data['url_conexion']) ? " URL: " . (string) $data['url_conexion'] . "." : "");
 
             return $mail->send();

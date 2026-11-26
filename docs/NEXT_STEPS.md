@@ -48,7 +48,9 @@
 - ✅ `feature/opciones-inscripcion-hibrida` — **NO requiere SQL**: los códigos `HIBRIDO` (7) y `HIB_VIRTUAL` (11) caben en `asistencia_tipo VARCHAR(25)` ya existente en ambas BD
 - ✅ `feature/opciones-curso-intensivo-congreso-pv` — **NO requiere SQL**: `INTENSIVO_COMPLETO` (18), `INTENSIVO_MODULOS` (17), `CONG_100_PRESENCIAL` (19) y `CONG_100_VIRTUAL` (16) caben en `asistencia_tipo VARCHAR(25)`; las modalidades nuevas caben en `modalidad VARCHAR(50)`; no se tocó ningún ENUM
 - ✅ `feature/seminario-presencial-virtual` — **NO requiere SQL**: `SEM_100_PRESENCIAL` (18) y `SEM_100_VIRTUAL` (15) caben en `asistencia_tipo`
-- ⏳ `docs/sql/2026_11_09_jornada_tipo_evento_presencial.sql` — **REQUIERE SQL**: `tipo_evento_presencial` es ENUM, así que admitir "Jornada" obliga a un `MODIFY COLUMN`. Pendiente de aplicar en PRODUCCIÓN. **No copiar el ENUM local**: el local tiene `Diplomado` (rama no mergeada) que producción no tiene; verificar el ENUM real de producción antes del ALTER y conservar todos sus valores
+- ✅ `docs/sql/2026_11_09_jornada_tipo_evento_presencial.sql` — aplicada en PRODUCCIÓN (verificado el 2026-11-26: `enum('Congreso','Seminario','Jornada')`, sin `Diplomado`). **No copiar el ENUM local**: el local tiene `Diplomado` (rama no mergeada)
+- ⏳ `docs/sql/2026_11_26_configuracion_asistencia_soporte_evento.sql` — **REQUIERE SQL** (aditivo): columnas `eventos.permite_asistencia_virtual` y `eventos.solicitar_soporte_confirmacion`, ambas `TINYINT(1) NOT NULL DEFAULT 1`. Pendiente en PRODUCCIÓN. Orden: respaldo → SQL → verificación → deploy. El código tolera que falten (usa 1), pero ese es el orden oficial
+- Producción usa MariaDB 10.6 con `sql_mode` **no estricto** (verificado el 2026-11-26): valores inválidos se truncan sin error, por eso el código valida 0/1 en PHP
 
 > Nota: existe una rama local pausada `feature/diplomado-curso-especial` (commit `9242e4e`)
 > con su propia migración (`2026_06_11_diplomado_tipo_evento_presencial.sql`, aplicada solo

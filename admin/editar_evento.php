@@ -6,6 +6,7 @@ require_once __DIR__ . '/_auth.php';
 require_login();
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
+require_once dirname(__DIR__) . '/config/evento_config.php';
 require_once __DIR__ . '/helpers/audit.php';
 
 /* ============================================================
@@ -228,6 +229,9 @@ $aplica_url       = ($modN === 'virtual' || $modN === 'hibrida' || $es_ce || $es
 // porque su opción híbrida (INTENSIVO_HIBRIDO) tiene sesiones presenciales.
 // No implica sección de fechas presenciales: en esta fase la agenda sigue siendo una sola.
 $permite_lugar    = ($tiene_presencial || $es_ci);
+// Configuración por evento (si faltan las columnas, se muestran los defectos y no se guarda)
+$evento_cfg = evento_config_cargar($conn, $evento_id);
+$cfg_cols = evento_config_columnas($conn);
 
 $fechas_actuales = ev_cargar_fechas($conn, $evento_id);
 $modulos_actuales = $gestiona_modulos ? ev_cargar_modulos($conn, $evento_id) : array();
@@ -291,6 +295,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($es_ci && $lugar_personalizado === null) {
       $error = 'Para Curso Intensivo debes indicar el lugar de las sesiones presenciales.';
     }
+  }
+
+  // Configuración del formulario y confirmaciones: 0/1 estrictos; ausente o inválido = conservar
+  // Permitir asistencia virtual: solo aplica a Presencial + Seminario (con el tipo final del formulario)
+  $permite_asistencia_virtual = $evento_cfg['permite_asistencia_virtual'];
+  if ($modN === 'presencial' && $tipo_evento_presencial === 'Seminario') {
+    $tmpCfg = evento_config_post('permite_asistencia_virtual');
+    if ($tmpCfg !== null) {
+      $permite_asistencia_virtual = $tmpCfg;
+    }
+  }
+  $solicitar_soporte_confirmacion = $evento_cfg['solicitar_soporte_confirmacion'];
+  $tmpCfg = evento_config_post('solicitar_soporte_confirmacion');
+  if ($tmpCfg !== null) {
+    $solicitar_soporte_confirmacion = $tmpCfg;
   }
 
   // URL de conexión: solo si aplica; vacía = null
@@ -462,6 +481,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $stmt->close();
 
+    // Configuración por evento: solo columnas existentes y solo si cambió
+    // Si falla, el resto de cambios sigue su curso y se avisa explícitamente (cfg_error)
+    $cambia_cfg = array();
+    $cfg_guardada = true;
+    if (empty($error)) {
+      $cfgValores = array(
+        'permite_asistencia_virtual' => $permite_asistencia_virtual,
+        'solicitar_soporte_confirmacion' => $solicitar_soporte_confirmacion
+      );
+      foreach ($cfgValores as $cfgCol => $cfgVal) {
+        if (isset($cfg_cols[$cfgCol]) && $cfgVal !== $evento_cfg[$cfgCol]) {
+          $cambia_cfg[$cfgCol] = $cfgVal;
+        }
+      }
+      if (!empty($cambia_cfg)) {
+        $cfg_guardada = evento_config_guardar($conn, $evento_id, $cambia_cfg);
+      }
+    }
+
     // Fechas: reemplazo completo SOLO si hubo cambios reales
     if (empty($error) && $cambia_fechas) {
       $del = $conn->prepare("DELETE FROM eventos_fechas WHERE evento_id = ?");
@@ -546,16 +584,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       log_activity($conn, 'editar_evento', 'evento', (string) $evento_id, array(
         'cambia_fechas' => $cambia_fechas ? 1 : 0,
         'cambia_modulos' => $cambia_modulos ? 1 : 0,
+        'cambia_config' => $cambia_cfg,
+        'config_guardada' => $cfg_guardada ? 1 : 0,
         'inscritos' => $total_inscritos
       ));
 
-      header('Location: editar_evento.php?id=' . $evento_id . '&ok=1');
+      header('Location: editar_evento.php?id=' . $evento_id . ($cfg_guardada ? '&ok=1' : '&cfg_error=1'));
       exit;
     }
   }
 
   // Si hubo error: recargar datos frescos para re-render (no se aplicó nada en BD salvo validación previa)
   $evento = ev_cargar_evento($conn, $evento_id);
+  $evento_cfg = evento_config_cargar($conn, $evento_id);
   $fechas_actuales = ev_cargar_fechas($conn, $evento_id);
   $modulos_actuales = $gestiona_modulos ? ev_cargar_modulos($conn, $evento_id) : array();
   $fechas_pres = array();
@@ -630,6 +671,13 @@ $urlPublica = base_url('registro.php?e=' . urlencode($evento['slug']));
       </div>
     <?php endif; ?>
 
+    <?php if (isset($_GET['cfg_error']) && $_GET['cfg_error'] == 1): ?>
+      <div class="bg-red-100 text-red-800 font-medium px-6 py-4 rounded-xl">
+        Los demás cambios se guardaron, pero la configuración del formulario y confirmaciones NO se pudo guardar.
+        Revisa los valores mostrados abajo y vuelve a intentarlo.
+      </div>
+    <?php endif; ?>
+
     <?php if (!empty($error)): ?>
       <div class="bg-red-100 text-red-800 font-medium px-6 py-4 rounded-xl">
         <?php echo hx($error); ?>
@@ -698,7 +746,7 @@ $urlPublica = base_url('registro.php?e=' . urlencode($evento['slug']));
       <?php if ($aplica_tipo_pres): ?>
         <div class="p-4 border border-gray-200 rounded-xl">
           <label class="font-semibold text-gray-700 block mb-2">Tipo de evento presencial:</label>
-          <select name="tipo_evento_presencial" class="w-full p-3 border border-gray-300 rounded-xl">
+          <select name="tipo_evento_presencial" id="tipo_evento_presencial" class="w-full p-3 border border-gray-300 rounded-xl">
             <option value="">Selecciona...</option>
             <option value="Congreso" <?php echo ($evento['tipo_evento_presencial'] === 'Congreso') ? 'selected' : ''; ?>>Congreso</option>
             <option value="Seminario" <?php echo ($evento['tipo_evento_presencial'] === 'Seminario') ? 'selected' : ''; ?>>Seminario</option>
@@ -736,6 +784,38 @@ $urlPublica = base_url('registro.php?e=' . urlencode($evento['slug']));
             <?php echo $evento['autoestudio'] ? 'checked' : ''; ?>>
           Incluye Autoestudio y trabajo integrador
         </label>
+      </div>
+
+      <!-- Configuración del formulario y confirmaciones (por evento) -->
+      <div class="p-4 border border-gray-200 rounded-xl">
+        <div class="font-semibold text-gray-700 mb-2">Configuración del formulario y confirmaciones</div>
+        <?php if (count($cfg_cols) < 2): ?>
+          <div class="mb-3 p-3 rounded-xl bg-yellow-50 border border-gray-200 text-yellow-800 text-sm">
+            Pendiente la migración de base de datos: esta configuración aún no se guardará y el evento usa el comportamiento predeterminado.
+          </div>
+        <?php endif; ?>
+
+        <?php if ($modN === 'presencial'): ?>
+          <div id="wrap_cfg_virtual" class="mb-3 <?php echo ($evento['tipo_evento_presencial'] === 'Seminario') ? '' : 'hidden'; ?>">
+            <input type="hidden" name="permite_asistencia_virtual" value="0">
+            <label class="inline-flex items-center gap-2">
+              <input type="checkbox" name="permite_asistencia_virtual" value="1" class="accent-[#942934]"
+                <?php echo $evento_cfg['permite_asistencia_virtual'] ? 'checked' : ''; ?>>
+              Permitir asistencia virtual
+            </label>
+            <div class="text-sm text-gray-600" style="margin-left:1.5rem">Si se desactiva, el seminario solo permite asistencia presencial. Los inscritos virtuales anteriores conservan su elección.</div>
+          </div>
+        <?php endif; ?>
+
+        <div>
+          <input type="hidden" name="solicitar_soporte_confirmacion" value="0">
+          <label class="inline-flex items-center gap-2">
+            <input type="checkbox" name="solicitar_soporte_confirmacion" value="1" class="accent-[#942934]"
+              <?php echo $evento_cfg['solicitar_soporte_confirmacion'] ? 'checked' : ''; ?>>
+            Mostrar recordatorios de soporte de pago en los correos
+          </label>
+          <div class="text-sm text-gray-600" style="margin-left:1.5rem">Si se desactiva, el correo al participante no pide el soporte de pago y el aviso a la comercial no advierte que falta.</div>
+        </div>
       </div>
 
       <div>
@@ -900,6 +980,20 @@ $urlPublica = base_url('registro.php?e=' . urlencode($evento['slug']));
   </div>
 
   <script>
+    // Permitir asistencia virtual: visible solo cuando el tipo (final) es Seminario
+    (function () {
+      var sel = document.getElementById('tipo_evento_presencial');
+      var wrap = document.getElementById('wrap_cfg_virtual');
+      if (!sel || !wrap) return;
+      var tipoActual = <?php echo json_encode((string) $evento['tipo_evento_presencial']); ?>;
+      function toggleCfgVirtual() {
+        var tipo = sel.value !== '' ? sel.value : tipoActual; // vacío = se conserva el actual
+        wrap.classList.toggle('hidden', tipo !== 'Seminario');
+      }
+      sel.addEventListener('change', toggleCfgVirtual);
+      toggleCfgVirtual();
+    })();
+
     (function () {
       function buildFechaRow(prefix) {
         var div = document.createElement('div');

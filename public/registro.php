@@ -4,6 +4,7 @@ ini_set('display_errors', 1);
 
 require_once dirname(__DIR__) . '/db/conexion.php';
 require_once dirname(__DIR__) . '/config/url.php';
+require_once dirname(__DIR__) . '/config/evento_config.php';
 require_once dirname(__DIR__) . '/correo/enviar_correo.php';
 
 $slug = isset($_GET['e']) ? $_GET['e'] : '';
@@ -65,6 +66,22 @@ if ($label_presencial !== 'Congreso' && $label_presencial !== 'Seminario' && $la
 
 // Presencial + Seminario: el inscrito elige 100% presencial o 100% virtual (el evento sigue siendo Presencial)
 $is_seminario_pv = ($mod === 'presencial' && strtolower(trim((string) ($evento['tipo_evento_presencial'] ?? ''))) === 'seminario');
+
+// Configuración por evento (defectos 1/1 si las columnas aún no existen)
+$evento_cfg = evento_config_cargar($conn, $evento['id']);
+// Seminario exclusivamente presencial: no se ofrece 100% virtual
+$sem_solo_presencial = ($is_seminario_pv && $evento_cfg['permite_asistencia_virtual'] === 0);
+
+// Rechazo de una elección virtual explícita cuando el evento no la permite:
+// no se guarda la inscripción ni se envían correos (no se convierte en presencial en silencio)
+$rechazo_inscripcion = '';
+if ($_SERVER["REQUEST_METHOD"] === "POST" && $sem_solo_presencial) {
+  $asis_post = isset($_POST['asistencia_tipo']) && is_string($_POST['asistencia_tipo']) ? strtoupper(trim($_POST['asistencia_tipo'])) : '';
+  if ($asis_post === 'SEM_100_VIRTUAL') {
+    $rechazo_inscripcion = 'Este evento solo admite asistencia presencial. Su inscripción no fue registrada; por favor vuelva a cargar el formulario e inténtelo de nuevo.';
+    http_response_code(422);
+  }
+}
 
 // Fechas/horario del evento (con tipo)
 $fechas_presenciales = array();
@@ -351,7 +368,7 @@ function pintarModulosVirtualesHtml($mods)
 }
 
 // POST: guardar inscripción + correo
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
+if ($_SERVER["REQUEST_METHOD"] === "POST" && $rechazo_inscripcion === '') {
   $evento_id = isset($_POST["evento_id"]) ? (int) $_POST["evento_id"] : 0;
   $tipo_inscripcion = isset($_POST["tipo_inscripcion"]) ? $_POST["tipo_inscripcion"] : '';
 
@@ -698,7 +715,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
       'incluye_virtual' => $incluye_virtual ? 'SI' : 'NO',
       'url_conexion' => $evento['url_conexion'] ?? '',
       'congreso_presencial' => $ce_tiene_presencial ? 1 : 0,
-      'congreso_virtual' => $ce_tiene_virtual ? 1 : 0
+      'congreso_virtual' => $ce_tiene_virtual ? 1 : 0,
+      'solicitar_soporte_confirmacion' => $evento_cfg['solicitar_soporte_confirmacion']
     );
 
     $MAIL_DEBUG = false;
@@ -781,7 +799,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         'incluye_virtual' => $incluye_virtual ? 'SI' : 'NO',
         'url_conexion' => $evento['url_conexion'] ?? '',
         'congreso_presencial' => $ce_tiene_presencial ? 1 : 0,
-        'congreso_virtual' => $ce_tiene_virtual ? 1 : 0
+        'congreso_virtual' => $ce_tiene_virtual ? 1 : 0,
+        'solicitar_soporte_confirmacion' => $evento_cfg['solicitar_soporte_confirmacion']
       );
 
       $okAviso = $correo->sendAvisoNuevaInscripcion($com_email, $aviso);
@@ -958,6 +977,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <div class="text-sm text-green-700 mt-1">
               Recibirá la información correspondiente en los canales oficiales del evento.
             </div>
+          </div>
+        <?php endif; ?>
+
+        <?php if ($rechazo_inscripcion !== ''): ?>
+          <div class="mb-4 p-4 rounded-xl bg-red-100 text-red-800 font-medium">
+            <?php echo htmlspecialchars($rechazo_inscripcion, ENT_QUOTES, 'UTF-8'); ?>
           </div>
         <?php endif; ?>
 
@@ -1203,7 +1228,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             </div>
           <?php endif; ?>
 
-          <?php if ($is_seminario_pv): ?>
+          <?php if ($sem_solo_presencial): ?>
+            <div class="p-4 border border-gray-300 rounded-xl">
+              <div class="font-semibold text-gray-800">Asistencia exclusivamente presencial</div>
+              <div class="text-sm text-gray-600">Participa en toda la jornada académica presencial</div>
+            </div>
+          <?php elseif ($is_seminario_pv): ?>
             <div class="p-4 border border-gray-300 rounded-xl">
               <div class="font-semibold text-gray-800 mb-3">Seleccione su tipo de asistencia</div>
 
